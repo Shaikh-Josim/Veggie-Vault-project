@@ -1,0 +1,32 @@
+
+# Compiled / cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+
+# Django
+*.log
+*.log.jsonl
+db.sqlite3
+images/
+staticfiles/
+
+# IDEs & Editors
+.vscode/
+
+# Environment & secrets
+.env
+
+# Others
+testing_data/
+Django-React-Full-Stack-App/
+frontend/
+stop
+upcoming features/
+veggie-vault.code-workspace
+Backend/api
+zp1.py

@@ -1,0 +1,78 @@
+{
+    "version": 1,
+    "disable_existing_loggers": false,
+    "formatters": {
+        "verbose": {
+            "format": "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s"
+        },
+        "simple": {
+            "format": "[Level:%(levelname)s |Module:%(module)s |Line_no:%(lineno)d] \ndatetime:%(asctime)s: \nMSG:%(message)s\n\n",
+            "datefmt": "Date: %Y-%m-%d Time:%H:%M:%S%z"
+        },
+        "json": {
+            "()": "logging_confgs.jsonlogger.JSONFormatter",
+            "fmt_keys": {
+                "level": "levelname",
+                "message": "message",
+                "utc_timestamp": "utc_timestamp",
+                "ist_timestamp": "ist_timestamp",
+                "logger": "name",
+                "module": "module",
+                "function": "funcName",
+                "line": "lineno",
+                "thread_name": "threadName"
+            }
+        }
+    },
+    "handlers": {
+        "stderr": {
+            "class": "logging.StreamHandler",
+            "level": "WARNING",
+            "formatter": "simple",
+            "stream": "ext://sys.stderr"
+        },
+        "file": {
+            "level": "DEBUG",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": "django_errors.log",
+            "formatter": "json",
+            "maxBytes": 3000000,
+            "backupCount": 3
+        },
+        "queue_handler": {
+            "class": "logging.handlers.QueueHandler",
+            "handlers": [
+                "stderr",
+                "file"
+            ],
+            "respect_handler_level": true
+            }
+    },
+    "loggers": {
+        "django": { 
+            "handlers": ["queue_handler"], 
+            "level": "ERROR", 
+            "propagate": true
+            }, 
+        "app_users": { 
+            "handlers": ["queue_handler"], 
+            "level": "DEBUG", 
+            "propagate": false
+            },
+        "app_products": { 
+            "handlers": ["queue_handler"], 
+            "level": "DEBUG", 
+            "propagate": false
+            },
+        "app_locations": { 
+            "handlers": ["queue_handler"], 
+            "level": "DEBUG", 
+            "propagate": false
+            },
+        "app_orders": { 
+            "handlers": ["queue_handler"], 
+            "level": "DEBUG", 
+            "propagate": false
+            }
+    }
+}
