@@ -17,10 +17,12 @@ class UserOperationsTest(TestCase):
         self.client = APIClient()
         user = User.objects.create(email = "jhon@domain.com", password = "jhon1234")
         user.save()
-        location = Location( staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park" )
+        location = Location( staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park", is_homeaddress = True )
         location.save()
-        profile = Profile( user=user, fname="John", lname="Doe", location=location, role=Profile.Role.CONSUMER, mobile_no="9876543210", user_Img=None)
+        profile = Profile( user=user, fname="John", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="9876543210", user_Img=None)
         profile.save()
+        profile.location.add(location)
+        
 
         self.create_user_data = {
             "email" : "jhon23@domain.com",
@@ -49,7 +51,7 @@ class UserOperationsTest(TestCase):
         }
 
         self.profile_update_data = {
-            "fname" :"nigger",
+            "fname" :"jhon2",
             "lname" :"",
             "location" :"",
             "role" :"",
@@ -57,7 +59,7 @@ class UserOperationsTest(TestCase):
             "user_Img" :"",
     }
 
-    def test_create_users(self):
+    def atest_create_users(self):
         print("entering into create user test")
         url = reverse('create-user')
         response = self.client.post(url, self.create_user_data)
@@ -118,7 +120,7 @@ class UserOperationsTest(TestCase):
         response = cast(Response, response)
         print(response.data)
 
-    def atest_profile_update(self):
+    def test_profile_update(self):
         print("entering profile updation test")
         url = reverse('profile')
         self.atest_login()

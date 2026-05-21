@@ -113,7 +113,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     
 
     email = serializers.SerializerMethodField(source="user.email", read_only=True)
-    location = LocationSerializer(required=False, allow_null=True)
+    location = LocationSerializer(many = True, required=False, allow_null=True)
     class Meta:
         model = Profile
         fields = ["fname","lname","email","location","role","mobile_no", "user_Img"]
@@ -122,8 +122,12 @@ class ProfileSerializer(serializers.ModelSerializer):
         obj = cast(Profile, obj) #typehint
         return obj.user.email if obj.user else None
     
+    def get_location(self,obj):
+        obj = cast(Profile, obj) #typehint
+        qs = Profile.objects.filter(user = obj.user, location__is_homeaddress = True).all()
+        return LocationSerializer(qs, many=True).data
+    
     def create(self, validated_data):
-        print(validated_data)
         validated_data = cast(dict, validated_data)
         location_data = validated_data.pop('location')
         location_serializer = LocationSerializer(location_data)
@@ -131,6 +135,9 @@ class ProfileSerializer(serializers.ModelSerializer):
         location, _ = Location.objects.get_or_create(**location_data)
         user_profile = Profile.objects.create(location = location,**validated_data)
         return user_profile
+    
+    
+
     
     
  

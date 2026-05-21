@@ -188,8 +188,6 @@ class LoginView(views.APIView):
                 email= data['email'],  
                 password = data['password']
             )
-
-            print(res)
             
             #refresh_token = request.COOKIES.get("refreshToken")
             if isinstance(res, dict):
@@ -272,7 +270,7 @@ class ForgetPasswordView(views.APIView):
         except Exception as e: 
             sentry_sdk.capture_exception(e)
             logger.exception(e)
-            print(e)
+            
             return Response({"error": str(e)}, status= status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 class ChangePasswordView(views.APIView):
@@ -318,7 +316,6 @@ class ChangePasswordView(views.APIView):
     def post(self, request):      
          
         try: 
-            print(request.data)
             ep_serializer = EmailPasswordSerializer(data = request.data)
             ep_serializer.is_valid(raise_exception=True)
             ep_serializer_data = cast(Dict[str,Any], ep_serializer.validated_data)
@@ -398,5 +395,6 @@ class UpdateProfileView(generics.RetrieveUpdateDestroyAPIView):
     def get_object(self):
         profile = Profile.objects.get(user = self.request.user)
         return profile
+        
 
     

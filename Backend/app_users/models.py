@@ -121,7 +121,7 @@ class Profile(BaseModel):
     user = models.OneToOneField(User,verbose_name='user',               on_delete=models.CASCADE, related_name= 'profile', related_query_name= 'user_profile')
     fname = models.CharField(verbose_name='first name',max_length=30, null= False , default='', validators=[name_validator])
     lname = models.CharField(verbose_name='last name',max_length=30, null= False, default= '', validators=[name_validator])
-    location = models.ForeignKey(Location,verbose_name='location', on_delete=models.CASCADE, related_name="profile", null=True, blank = True, default=None)
+    location = models.ManyToManyField(Location,verbose_name='location', related_name="location", null=True, blank = True, default=None)
     role = models.IntegerField(verbose_name='role',choices=Role.choices,default=Role.CONSUMER)
     mobile_no = models.CharField(verbose_name='mobile no.',max_length=10, unique=True, null = True, blank=True, validators=[mobile_no_validator])
     user_Img = models.ImageField(verbose_name='profile image',upload_to='images/users/', null=True, blank=True)
