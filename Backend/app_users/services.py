@@ -3,22 +3,24 @@ from typing import cast, Dict, Any, Tuple, Optional
 from datetime import timedelta
 
 from django.utils import timezone
+from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.validators import validate_email 
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, EmailVerificationCode
+from .models import User, EmailVerificationCode, Profile, Location
 #from base import services as core_services
 from base.tasks import send_email_task
 
-logger = logging.getLogger('user_service')
+logger = logging.getLogger('app_users')
 
-class UserNotFound(Exception): pass
-class CodeNotFound(Exception): pass
-class InvalidCode(Exception): pass
-class InvalidPassword(Exception): pass
+class NotFound(Exception): pass
+class Invalid(Exception): pass
 class AuthenticationError(Exception): pass
+class CreateError(Exception):pass
+class DeleteError(Exception):pass
+class UpdateError(Exception): pass
 
 
 def generate_verification_code()-> str:
@@ -49,7 +51,7 @@ def save_user_verification_code(email: str, vc: str)-> None:
         None
 
     Raises:
-        UserNotFound: If no user exists with the given email.
+        NotFound: If no user exists with the given email.
         Exception: For any unexpected errors during code creation.
     """
 
@@ -57,7 +59,7 @@ def save_user_verification_code(email: str, vc: str)-> None:
         user_obj = User.objects.get(email = email)
         EmailVerificationCode.objects.create( user=user_obj, code=vc, expires_at=timezone.now() + timedelta(minutes=10))
     except User.DoesNotExist:
-        raise UserNotFound("user does not exist")
+        raise NotFound("user does not exist")
     except Exception as e:
         raise e
 
@@ -73,9 +75,8 @@ def handle_verification(email:str, v_code: str) -> Tuple[str, Optional[User]]:
         tuple: A tuple containing a message string and either None (if a new code was sent) or the verified User object.
 
     Raises:
-        UserNotFound: If no user exists with the given email.
-        CodeNotFound: If the provided verification code does not exist.
-        InvalidCode: If the verification code is expired or already used.
+        NotFound: If no user exists with the given email. Or If the provided verification code does not exist.
+        Invalid: If the verification code is expired or already used.
         Exception: For any unexpected errors during the verification process.
     """
 
@@ -93,7 +94,7 @@ def handle_verification(email:str, v_code: str) -> Tuple[str, Optional[User]]:
             logger.info("password changed sucsessfully")
             return "Password is changed Successfully", user_obj
 
-    except (CodeNotFound, UserNotFound, InvalidCode) as e:
+    except (NotFound, Invalid) as e:
         raise e
     except Exception as e:
         raise e
@@ -110,9 +111,8 @@ def match_user_verification_code(email: str, v_code:str)-> Optional[User]:
         User: The User object if the verification code is valid and successfully matched.
 
     Raises:
-        UserNotFound: If no user exists with the given email.
-        CodeNotFound: If no verification code is found for the user.
-        InvalidCode: If the verification code is expired or already used.
+        NotFound: If no user exists with the given email. or If no verification code is found for the user.
+        Invalid: If the verification code is expired or already used.
         Exception: For any unexpected errors encountered during verification.
     """
 
@@ -121,9 +121,9 @@ def match_user_verification_code(email: str, v_code:str)-> Optional[User]:
         evc_obj = EmailVerificationCode.objects.filter(user = user_obj, code = v_code).first()
 
         if not evc_obj:
-            raise CodeNotFound("Verification Code not found")
+            raise NotFound("Verification Code not found")
         if not evc_obj.is_valid(): 
-            raise InvalidCode("Code expired or already used")
+            raise Invalid("Code expired or already used")
 
         if evc_obj.code == v_code:
             evc_obj.is_used = True
@@ -131,7 +131,7 @@ def match_user_verification_code(email: str, v_code:str)-> Optional[User]:
             evc_obj.delete()
         return user_obj
     except User.DoesNotExist:
-        raise UserNotFound("Account with this email does not exists")
+        raise NotFound("Account with this email does not exists")
     except Exception as e:
         raise e
     
@@ -148,18 +148,18 @@ def change_user_password(email: str, password: str, new_pass: str)-> Tuple[ Opti
         tuple: A tuple containing the User object and a dictionary with updated credentials.
 
     Raises:
-        UserNotFound: If no user exists with the given email.
-        InvalidPassword: If the current password is blank or does not match the stored password.
+        NotFound: If no user exists with the given email.
+        Invalid: If the current password is blank or does not match the stored password.
     """
 
     try:
         user_obj = User.objects.get(email = email)
             
         if not password:
-            raise InvalidPassword("Password can't be blank")
+            raise Invalid("Password can't be blank")
                     
         if not user_obj.check_password(password):
-            raise InvalidPassword("Password does not match (unauthorize)")
+            raise Invalid("Password does not match (unauthorize)")
         
         data = {
             "email": email,
@@ -168,7 +168,7 @@ def change_user_password(email: str, password: str, new_pass: str)-> Tuple[ Opti
         return user_obj, data
      
     except User.DoesNotExist:
-        raise UserNotFound("Account with this email does not exists")
+        raise NotFound("Account with this email does not exists")
     
 def authenticate_user(email:str, password:str)-> dict:
     """
@@ -182,11 +182,13 @@ def authenticate_user(email:str, password:str)-> dict:
         dict: A dictionary containing the refresh token, access token and user details.
 
     Raises:
-        UserNotFound: If no user exists with the given email.
+        NotFound: If no user exists with the given email.
         AuthenticationError: If the provided password is invalid or authentication fails.
     """
 
     try:
+        logger.info("Entering in service")
+        logger.info("Authenticating User")
         user_obj = User.objects.get(email = email)
         user = authenticate(email= email, password= password)
         if not user:
@@ -197,7 +199,7 @@ def authenticate_user(email:str, password:str)-> dict:
         }
         return res
     except User.DoesNotExist as e:
-        raise UserNotFound("Unable to find user")
+        raise NotFound("Unable to find user")
     
 def check_email(email:str)-> User|None:
     """
@@ -218,3 +220,91 @@ def check_email(email:str)-> User|None:
         return exist_email
     except ValidationError:
         raise ValidationError("Invalid email format")
+
+
+
+def update_profile_location(profile:Profile, **location_data)-> Profile:
+    """
+    Authenticate a user by verifying email and password credentials, and issue JWT tokens upon success.
+
+    Args:
+        email (str): The user's email address.
+        password (str): The user's plain-text password.
+
+    Returns:
+        dict: A dictionary containing the refresh token, access token and user details.
+
+    Raises:
+        NotFound: If no user exists with the given email.
+        AuthenticationError: If the provided password is invalid or authentication fails.
+    """
+    try:
+        logger.info("Entering in user service")
+        logger.info(" creating new Location or fetching existing one ")
+
+        old_location = location_data.pop('old_location')
+        new_location = location_data.pop('new_location')
+
+        location_obj, created = Location.objects.get_or_create(**new_location)
+        old_location_obj = Location.objects.get(**old_location)
+
+        if created:
+            logger.info("New location has been created")
+        else:
+            logger.info("Location already exists")
+
+        logger.info("Removing Old location from profile")
+        profile.location.remove(old_location_obj)
+        logger.info("Old location removed from profile")
+        logger.info("Adding Location to profile")
+        profile.location.add(location_obj)
+        logger.info("Location Added successfully")
+        
+
+        logger.info("Location added to Profile")
+
+
+        return profile
+    except Location.DoesNotExist:
+        raise NotFound("Location which need to update is not found")
+    except Exception as e:
+        logger.exception(str(e))
+        raise UpdateError("Update Failed")
+
+def delete_profile_locations(profile:Profile, locations_data:list[Dict[str,Any]])-> Profile:
+    try:
+        logger.info("Entering in user service")
+        locations_data if logger.info("Got locations data from request") else logger.info("locations data missing from request")
+        print(locations_data, "\t", type(locations_data))
+        with transaction.atomic():
+            for location in locations_data:
+                location_obj = Location.objects.get(**location)
+                profile.location.remove(location_obj)
+            logger.info("locations removed from profile successfully")
+
+        logger.info("Leaving service..")
+        return profile
+    except Location.DoesNotExist:
+        raise NotFound("Location which need to delete is not found")
+    except Exception as e:
+        logger.exception(str(e))
+        raise DeleteError("delete Failed")
+
+def add_profile_location(profile:Profile, **location_data)-> Profile:
+    try:
+        logger.info("Entering in user service")
+        print(location_data)
+        location_data if logger.info("Got location data from request") else logger.info("location data missing from request")
+
+        with transaction.atomic():
+            location_obj, _ = Location.objects.get_or_create(**location_data)
+            profile.location.add(location_obj)
+            logger.info("location added to profile successfully")
+
+        logger.info("Leaving service..")
+        return profile
+    except Location.DoesNotExist:
+        raise NotFound("Location which need to be added is not found")
+    except Exception as e:
+        logger.exception(str(e))
+        raise CreateError("Location addation Failed")

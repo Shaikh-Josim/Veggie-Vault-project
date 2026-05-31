@@ -5,6 +5,7 @@ from app_products.models import Product, Cart
 from testing_data.fill_dummy_data import fill_database
 #run test using
 #python manage.py test app_users.tests.test_models
+#python .\manage.py test app_users.tests.test_models.ProfileModelTest.test_profile_location
 
 class UserModelTest(TestCase):
 
@@ -50,6 +51,40 @@ class ProfileModelTest(TestCase):
         user = User.objects.create(email ="abc@example.com", password ='a1234')
         p = Profile.objects.create(user = user, mobile_no = 'abc')
         p.full_clean()
+
+    def test_profile_location(self):
+        user = User.objects.create(email = "jhon@domain.com", password = "jhon1234")
+        user.save()
+        location1 = Location( staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park", is_homeaddress = True )
+        location2 = Location( staddr="12 main Street", city="Autumnfield", state="California", hno="2", landmark="Near Dolphin Park", is_homeaddress = True )
+        location1.save()
+        location2.save()
+        profile = Profile( user=user, fname="John", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="9876543210", user_Img=None)
+        profile.save()
+        profile.location.add(location1,location2)
+        l = profile.location.filter(is_homeaddress=True)
+        print(l)
+
+    def test_location_M2M(self):
+        user = User.objects.create(email = "jhon@domain.com", password = "jhon1234")
+        user.save()
+        location1 = Location( staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park", is_homeaddress = True )
+        location2 = Location( staddr="12 main Street", city="Autumnfield", state="California", hno="2", landmark="Near Dolphin Park", is_homeaddress = True )
+        location1.save()
+        location2.save()
+        location3, _ = Location.objects.get_or_create( staddr="12 main Street", city="Autumnfield", state="California", hno="2", landmark="Near Dolphin Park", is_homeaddress = True )
+        print("newly created: ", _)
+        profile = Profile( user=user, fname="John", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="9876543210", user_Img=None)
+        profile.save()
+        print("before adding same 3rd location to profile")
+        profile.location.add(location1,location2)
+        l = profile.location.all()
+        print(l)
+        print("after adding same 3rd location to profile")
+        profile.location.add(location3)
+        l = profile.location.all()
+        print(l)
+
 
 class CartModelTest(TestCase):
     def setUp(self):

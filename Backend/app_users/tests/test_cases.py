@@ -17,11 +17,13 @@ class UserOperationsTest(TestCase):
         self.client = APIClient()
         user = User.objects.create(email = "jhon@domain.com", password = "jhon1234")
         user.save()
-        location = Location( staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park", is_homeaddress = True )
-        location.save()
+        location1 = Location( staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park", is_homeaddress = True )
+        location2 = Location( staddr="12 main Street", city="Autumnfield", state="California", hno="2", landmark="Near Dolphin Park", is_homeaddress = False )
+        location1.save()
+        location2.save()
         profile = Profile( user=user, fname="John", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="9876543210", user_Img=None)
         profile.save()
-        profile.location.add(location)
+        profile.location.add(location1,location2)
         
 
         self.create_user_data = {
@@ -52,12 +54,32 @@ class UserOperationsTest(TestCase):
 
         self.profile_update_data = {
             "fname" :"jhon2",
-            "lname" :"",
-            "location" :"",
-            "role" :"",
             "mobile_no" :"0007000700",
-            "user_Img" :"",
-    }
+        }
+
+        self.profile_location_update_data = {
+            "old_location":{
+                'staddr': '123 Baker Street', 'city': 'Springfield',    'state': 'California', 'hno': '42', 'landmark': 'Near Central Park', 'is_homeaddress': True
+            }, 
+            "new_location":{
+                'staddr': '123 Baker Street', 'city': 'Redfield',    'state': 'California', 'hno': '42', 'landmark': 'Near Central Park', 'is_homeaddress': True
+            },
+        }
+
+        self.profile_location_create_data = {            
+            'staddr': '34 circle road', 'city': 'Autumnfield', 'state': 'California', 'hno': '2', 'landmark': 'Near Dolphin Park', 'is_homeaddress': True
+        }
+
+        self.profile_location_delete_data = [
+            {
+                'staddr': '34 circle road', 'city': 'Autumnfield', 'state': 'California', 'hno': '2', 'landmark': 'Near Dolphin Park', 'is_homeaddress': True
+            },
+            {
+                'staddr': '123 Baker Street', 'city': 'Redfield',    'state': 'California', 'hno': '42', 'landmark': 'Near Central Park', 'is_homeaddress': True
+            }
+        ]
+            
+        
 
     def atest_create_users(self):
         print("entering into create user test")
@@ -69,7 +91,7 @@ class UserOperationsTest(TestCase):
 
     def atest_list_users(self):
         print("entering into list test")
-        url = reverse('list-users')
+        url = reverse('list-profiles')
         response = self.client.get(url)
         response = cast(Response, response)
         print(response)
@@ -120,19 +142,44 @@ class UserOperationsTest(TestCase):
         response = cast(Response, response)
         print(response.data)
 
-    def test_profile_update(self):
+    def atest_profile_update(self):
         print("entering profile updation test")
         url = reverse('profile')
         self.atest_login()
         access_token = input('access_token:\t')
 
         response_get = self.client.get(url, HTTP_AUTHORIZATION = 'Bearer '+ access_token)
-        response = self.client.put(url,data=self.profile_update_data,HTTP_AUTHORIZATION="Bearer " + access_token)
-        #response = self.client.post(url, self.forget_password_data)
-        response = cast(Response, response)
+        response_put = self.client.put(url, data = self.profile_update_data, format = 'json', HTTP_AUTHORIZATION="Bearer " + access_token)
         response_get = cast(Response, response_get)
-        print(response)
+        response_put = cast(Response, response_put)
+        print(response_put)
         print("response-get: ", response_get.data)
-        print("response-put: ", response.data)
+        print("response-put: ", response_put.data)
+
+    def test_profile_location_crud(self):
+        print("entering profile locations crud  test")
+        url_update = reverse('profile-location-update')
+        url_create = reverse("profile-location-create")
+        url_get = reverse("profile-locations")
+        url_delete = reverse('profile-location-delete')
+        self.atest_login()
+        access_token = input('access_token:\t')
+
+        response_get = self.client.get(url_get, HTTP_AUTHORIZATION = 'Bearer '+ access_token)
+        response_get = cast(Response, response_get)
+        print("response-get: ", response_get.data)
+
+        response_put = self.client.put(url_update, data = self.profile_location_update_data, format = 'json' ,HTTP_AUTHORIZATION="Bearer " + access_token)
+        response_put = cast(Response, response_put)
+        print("response-put: ", response_put.data)
+
+        response_create = self.client.post(url_create, data = self.profile_location_create_data, format = 'json' ,HTTP_AUTHORIZATION="Bearer " + access_token)
+        response_create = cast(Response, response_create)
+        print("response-create: ", response_create.data)
+
+        response_delete = self.client.delete(url_delete, data = self.profile_location_delete_data, content_type='application/json' ,HTTP_AUTHORIZATION="Bearer " + access_token)
+        response_delete = cast(Response, response_delete)
+        print("response-delete: ", response_delete.data)
+    
 
     
