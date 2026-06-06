@@ -18,5 +18,6 @@ class Location(BaseModel):
     landmark = models.CharField(verbose_name='Landmark', max_length=100, null = False, blank=True, default= '', validators=[address_validator])
     is_homeaddress = models.BooleanField(verbose_name='is home address', null=False, blank = True, default= False)
 
+
     def __str__(self):
         return f"address:{self.staddr},{self.city},{self.state}"

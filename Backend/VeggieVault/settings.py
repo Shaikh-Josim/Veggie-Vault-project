@@ -26,6 +26,11 @@ LOG_DIR=  os.path.join(BASE_DIR, 'logs')
 LOG_CONFG_DIR = os.path.join(BASE_DIR, 'logging_confgs', 'logging_config.json')
 os.makedirs(LOG_DIR, exist_ok=True)
 
+
+import sys
+
+
+    
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -174,6 +179,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
@@ -191,26 +197,9 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 #Logging settings
-log_setter = LogConfgsSetter( cnfgs_path= LOG_CONFG_DIR, log_store_path= LOG_DIR)   #Logging config using external file    
-log_setter.set_config()
+log_setter = LogConfgsSetter( cnfgs_path= LOG_CONFG_DIR, log_store_path= LOG_DIR)       
 
 
-#Glitchtip settings 
-import sentry_sdk
-from sentry_sdk.integrations.django import DjangoIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
-from logging import INFO, ERROR
-
-sentry_logging = LoggingIntegration( level=INFO, 
-event_level= ERROR
-) #Capturing Errors in GlitchTip
-sentry_sdk.init(
-    dsn=os.getenv("GLITCHTIP_DSN"),  # Replace with DSN from your GlitchTip project
-    release='VeggieVault@1.0.0',
-    integrations=[DjangoIntegration(), sentry_logging],
-    traces_sample_rate=1.0,   # Adjust if you want performance monitoring
-    send_default_pii=True     # Captures user info if available
-)
 
 
 #Email Setting
@@ -229,9 +218,6 @@ CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_BACKEND = 'django-db'
-#uncomment this if running tests
-CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "False") == "True"
-CELERY_TASK_EAGER_PROPAGATES = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "False") == "True"
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_TIMEZONE = 'Asia/Kolkata'

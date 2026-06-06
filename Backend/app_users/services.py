@@ -10,17 +10,10 @@ from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import User, EmailVerificationCode, Profile, Location
-#from base import services as core_services
+from base.services import  NotFound, AuthenticationError, Invalid, CreateError, DeleteError, UpdateError
 from base.tasks import send_email_task
 
 logger = logging.getLogger('app_users')
-
-class NotFound(Exception): pass
-class Invalid(Exception): pass
-class AuthenticationError(Exception): pass
-class CreateError(Exception):pass
-class DeleteError(Exception):pass
-class UpdateError(Exception): pass
 
 
 def generate_verification_code()-> str:

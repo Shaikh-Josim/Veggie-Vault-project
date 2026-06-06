@@ -3,8 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.response import Response
 from rest_framework.test import APIClient
-from app_users.models import User, Profile
-from app_products.models import Product
+
 from testing_data.fill_dummy_data import fill_database
 
 class UserViewTest(TestCase):

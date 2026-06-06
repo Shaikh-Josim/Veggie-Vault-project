@@ -10,20 +10,11 @@ from rest_framework.test import APIClient
 
 #run test with
 #python .\manage.py test <app-name>.<test-folder>.<test-file-name>
-#python .\manage.py test app_users.tests.test_cases
+#$env:PYTHONUNBUFFERED=1; python .\manage.py test app_users.tests.test_cases --debug-mode
 class UserOperationsTest(TestCase):
 
     def setUp(self) -> None:
-        self.client = APIClient()
-        user = User.objects.create(email = "jhon@domain.com", password = "jhon1234")
-        user.save()
-        location1 = Location( staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park", is_homeaddress = True )
-        location2 = Location( staddr="12 main Street", city="Autumnfield", state="California", hno="2", landmark="Near Dolphin Park", is_homeaddress = False )
-        location1.save()
-        location2.save()
-        profile = Profile( user=user, fname="John", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="9876543210", user_Img=None)
-        profile.save()
-        profile.location.add(location1,location2)
+        self.setUser()
         
 
         self.create_user_data = {
@@ -79,7 +70,19 @@ class UserOperationsTest(TestCase):
             }
         ]
             
+    def setUser(self)   -> None:
+        self.client = APIClient()
+        user = User.objects.create(email = "jhon@domain.com", password = "jhon1234")
+        user.save()
+        location1 = Location( staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park", is_homeaddress = True )
+        location2 = Location( staddr="12 main Street", city="Autumnfield", state="California", hno="2", landmark="Near Dolphin Park", is_homeaddress = False )
+        location1.save()
+        location2.save()
+        profile = Profile( user=user, fname="John", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="9876543210", user_Img=None)
+        profile.save()
+        profile.location.add(location1,location2)
         
+
 
     def atest_create_users(self):
         print("entering into create user test")

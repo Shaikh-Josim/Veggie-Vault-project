@@ -2,6 +2,16 @@ import os
 from typing import cast, Dict
 from django.core.mail import send_mail
 
+
+
+class NotFound(Exception): pass
+class Invalid(Exception): pass
+class AuthenticationError(Exception): pass
+class CreateError(Exception):pass
+class DeleteError(Exception):pass
+class UpdateError(Exception): pass
+
+
 """email = EmailMessage(
 subject="Hello",
 body="Body goes here",

@@ -1,9 +1,13 @@
 from typing import cast
+from uuid import UUID
+from decimal import Decimal
+
 from rest_framework import serializers
 
+from app_users.models import Profile
 from app_products.models import Product, Cart
 
-class ProductSerializer(serializers.ModelSerializer):
+class ProductNestedSerializer(serializers.ModelSerializer):
     category = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
     class Meta:
@@ -20,27 +24,29 @@ class ProductSerializer(serializers.ModelSerializer):
                 "type":obj.get_status_display(),
                 "value": obj.status}
     
+class ProductSerializer(serializers.Serializer):
+    product = ProductNestedSerializer(source = '*')
+    
+
 class CartSerializer(serializers.ModelSerializer):
-    
-    class ProductSerializer(serializers.ModelSerializer):
-        class Meta:
-            model = Product
-            fields = ["name", "price", "status", "product_Img"]
-    
-    product = ProductSerializer()
+    cart_id = serializers.SerializerMethodField()
+    total_price = serializers.SerializerMethodField()
+    profile_id = serializers.PrimaryKeyRelatedField(queryset=Profile.objects.all())
+    product = ProductNestedSerializer(read_only = True)
+    product_id = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
 
     class Meta:
         model = Cart
-        fields = ["product" , "quantity", "total_price"]
+        fields = ["cart_id","profile_id", "product_id", "product", "quantity", "total_price"]
 
-    def get_total_price(self,obj):
-        obj = cast(Cart, obj) #typehint
+    def get_cart_id(self, obj: Cart) -> UUID | None:
+        return obj.uid if obj else None
+
+    def get_total_price(self, obj: Cart) -> Decimal | None:
         return obj.total_price if obj else None
     
-    """def create(self, validated_data):
-        print(validated_data)
-        validated_data = cast(dict, validated_data)
-        location_data = validated_data.pop('location')
-        location, _ = Location.objects.get_or_create(**location_data)
-        user_profile = Profile.objects.create(location = location,**validated_data)
-        return user_profile"""
+    def create(self, validated_data):
+        profile = validated_data.pop('profile_id')
+        product = validated_data.pop('product_id')
+        cart, created = Cart.objects.update_or_create(profile = profile, product =  product , defaults=validated_data)
+        return cart
