@@ -124,6 +124,26 @@ class ProfileSerializer(serializers.ModelSerializer):
         return obj.user.email if obj.user else None
 
 class ProfileUpdateLocationsSerializer(serializers.Serializer):
+    """
+    Serializer for updating a user's profile locations by replacing an old location
+    with a new one.
+
+    Nested Serializers:
+        LocationSerializer:
+            - old_location: Represents the existing location record that should be updated or replaced.
+            - new_location: Represents the new location data to be applied to the profile.
+
+    Fields:
+        old_location (LocationSerializer): The current location details associated with the profile.
+        new_location (LocationSerializer): The updated location details to replace the old location.
+
+    Use Cases:
+        - Allows clients to send both the old and new location data in a single request.
+
+    Returns:
+        dict: A validated dictionary containing both old and new location data.
+    """
+
     old_location = LocationSerializer()
     new_location = LocationSerializer()
 

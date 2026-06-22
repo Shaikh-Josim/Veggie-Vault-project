@@ -6,6 +6,10 @@ from VeggieVault.settings import *
 #Logging config using external file
 log_setter.set_test_logging_config()
 
+#url_settings
+ROOT_URLCONF = "app_orders.tests.test_urls"
+
+
 # Database settings
 DATABASES = {
     "default": {
@@ -17,3 +21,7 @@ DATABASES = {
 # Celery settings
 CELERY_TASK_ALWAYS_EAGER = "True"
 CELERY_TASK_EAGER_PROPAGATES = "True"
+
+
+
+

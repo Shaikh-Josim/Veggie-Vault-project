@@ -44,7 +44,6 @@ class ListCreateCartView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         try:
             cart_serializer = cast(CartSerializer,CartSerializer(data = request.data))
-            cart_serializer = cast(CartSerializer,self.get_serializer(data = request.data))
             cart_serializer.is_valid(raise_exception=True)
             cart_serializer_data = cast(Dict[str,Any], cart_serializer.validated_data)
             cart_serializer.save()

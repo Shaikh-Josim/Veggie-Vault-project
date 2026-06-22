@@ -221,3 +221,8 @@ CELERY_RESULT_BACKEND = 'django-db'
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_TIMEZONE = 'Asia/Kolkata'
+
+#razorpay variables
+
+RAZORPAY_TEST_API_KEY = os.getenv('RAZORPAY_TEST_API_KEY')
+RAZORPAY_TEST_KEY_SECRET = os.getenv('RAZORPAY_TEST_KEY_SECRET')

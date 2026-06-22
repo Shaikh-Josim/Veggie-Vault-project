@@ -5,7 +5,7 @@ from django.db import transaction, IntegrityError
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from rest_framework.exceptions import APIException, NotFound
 
-from base.services import NotFound, CreateError
+from base.exceptions import *
 from .models import Cart, Product
 from app_users.models import Profile
 

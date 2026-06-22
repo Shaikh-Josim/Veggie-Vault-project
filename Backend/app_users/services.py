@@ -10,7 +10,7 @@ from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import User, EmailVerificationCode, Profile, Location
-from base.services import  NotFound, AuthenticationError, Invalid, CreateError, DeleteError, UpdateError
+from base.exceptions import  *
 from base.tasks import send_email_task
 
 logger = logging.getLogger('app_users')
@@ -216,24 +216,37 @@ def check_email(email:str)-> User|None:
 
 
 
-def update_profile_location(profile:Profile, **location_data)-> Profile:
+def update_profile_location(profile: Profile, **location_data) -> Profile:
     """
-    Authenticate a user by verifying email and password credentials, and issue JWT tokens upon success.
+    Service function to update a user's profile location by replacing an old location
+    with a new one. This ensures that the profile reflects the latest location data
+    while maintaining consistency in the ManyToMany relationship.
 
     Args:
-        email (str): The user's email address.
-        password (str): The user's plain-text password.
+        profile (Profile): The Profile instance whose location needs to be updated.
+        **location_data (dict): A dictionary containing:
+            - old_location (dict): The existing location details to be removed.
+            - new_location (dict): The new location details to be added.
+
+    Process:
+        1. Extract old and new location data from the input.
+        2. Retrieve or create the new Location object using `get_or_create`.
+        3. Retrieve the old Location object using `get`.
+        4. Remove the old Location from the profile's location set.
+        5. Add the new Location to the profile's location set.
+        6. Log each step for debugging and traceability.
 
     Returns:
-        dict: A dictionary containing the refresh token, access token and user details.
+        Profile: The updated Profile instance with the new location attached and
+        the old location removed.
 
     Raises:
-        NotFound: If no user exists with the given email.
-        AuthenticationError: If the provided password is invalid or authentication fails.
+        NotFound: If the old location does not exist in the database.
+        UpdateError: If any unexpected error occurs during the update process.
     """
     try:
         logger.info("Entering in user service")
-        logger.info(" creating new Location or fetching existing one ")
+        logger.info("Creating new Location or fetching existing one")
 
         old_location = location_data.pop('old_location')
         new_location = location_data.pop('new_location')
@@ -249,41 +262,87 @@ def update_profile_location(profile:Profile, **location_data)-> Profile:
         logger.info("Removing Old location from profile")
         profile.location.remove(old_location_obj)
         logger.info("Old location removed from profile")
+
         logger.info("Adding Location to profile")
         profile.location.add(location_obj)
         logger.info("Location Added successfully")
-        
-
-        logger.info("Location added to Profile")
-
 
         return profile
     except Location.DoesNotExist:
-        raise NotFound("Location which need to update is not found")
+        raise NotFound("Location which needs to be updated is not found")
     except Exception as e:
         logger.exception(str(e))
         raise UpdateError("Update Failed")
 
-def delete_profile_locations(profile:Profile, locations_data:list[Dict[str,Any]])-> Profile:
+
+def delete_profile_locations(profile: Profile, locations_data: list[Dict[str, Any]]) -> Profile:
+    """
+    Service function to remove one or more locations from a user's profile.
+
+    Args:
+        profile (Profile): The Profile instance whose locations need to be removed.
+        locations_data (list[dict]): A list of dictionaries, each representing a location to be deleted. Each dictionary should contain the identifying fields of a Location object (e.g., street address, city, state, etc.).
+
+    Process:
+        1. Validate that location data is provided.
+        2. Iterate through each location in the list.
+        3. Retrieve the corresponding Location object from the database using `get`.
+        4. Remove the Location object from the profile's ManyToMany relationship.
+        5. Wrap the operation in a transaction to ensure atomicity.
+        6. Log each step for debugging and traceability.
+
+    Returns:
+        Profile: The updated Profile instance with the specified locations removed.
+
+    Raises:
+        NotFound: If any of the provided locations do not exist in the database.
+        DeleteError: If any unexpected error occurs during the deletion process.
+    """
     try:
         logger.info("Entering in user service")
         locations_data if logger.info("Got locations data from request") else logger.info("locations data missing from request")
         print(locations_data, "\t", type(locations_data))
+
         with transaction.atomic():
             for location in locations_data:
                 location_obj = Location.objects.get(**location)
                 profile.location.remove(location_obj)
-            logger.info("locations removed from profile successfully")
+            logger.info("Locations removed from profile successfully")
 
         logger.info("Leaving service..")
         return profile
     except Location.DoesNotExist:
-        raise NotFound("Location which need to delete is not found")
+        raise NotFound("Location which needs to be deleted is not found")
     except Exception as e:
         logger.exception(str(e))
-        raise DeleteError("delete Failed")
+        raise DeleteError("Delete Failed")
 
-def add_profile_location(profile:Profile, **location_data)-> Profile:
+def add_profile_location(profile: Profile, **location_data) -> Profile:
+    """
+    Service function to add a new location to a user's profile. If the location
+    already exists in the database, it will be reused; otherwise, a new Location
+    record will be created.
+
+    Args:
+        profile (Profile): The Profile instance to which the location should be added.
+        **location_data (dict): A dictionary containing the location details
+            (e.g., street address, city, state, house number, landmark, etc.).
+
+    Process:
+        1. Validate that location data is provided in the request.
+        2. Use `get_or_create` to either fetch an existing Location object or create
+           a new one based on the provided data.
+        3. Add the Location object to the profile's ManyToMany relationship.
+        4. Wrap the operation in a transaction to ensure atomicity.
+        5. Log each step for debugging and traceability.
+
+    Returns:
+        Profile: The updated Profile instance with the new location added.
+
+    Raises:
+        NotFound: If the specified location does not exist in the database.
+        CreateError: If any unexpected error occurs during the creation or addition process.
+    """
     try:
         logger.info("Entering in user service")
         print(location_data)
@@ -292,12 +351,12 @@ def add_profile_location(profile:Profile, **location_data)-> Profile:
         with transaction.atomic():
             location_obj, _ = Location.objects.get_or_create(**location_data)
             profile.location.add(location_obj)
-            logger.info("location added to profile successfully")
+            logger.info("Location added to profile successfully")
 
         logger.info("Leaving service..")
         return profile
     except Location.DoesNotExist:
-        raise NotFound("Location which need to be added is not found")
+        raise NotFound("Location which needs to be added is not found")
     except Exception as e:
         logger.exception(str(e))
-        raise CreateError("Location addation Failed")
+        raise CreateError("Location addition Failed")

@@ -36,9 +36,6 @@ class Product(BaseModel):
         verbose_name="Product's Status", choices=Status.choices,default= Status.INSTOCK)
     product_Img = models.ImageField(
         verbose_name="Product Image", upload_to='images/products/', null=False, default="images/products/vv.jpg")
-    
-    #for orders table
-    #consumers = models.ManyToManyField('app_users.Profile', through="app_orders.Orders", related_name="consumers")
 
     def save(self, *args, **kwargs):
         if not self.slug:
