@@ -85,15 +85,15 @@ class ProfileSerializer(serializers.ModelSerializer):
     Serializer for user profile data, including nested location details and custom email retrieval.
 
     Nested Serializers:
-        LocationSerializer: Handles location fields such as street address, city, state, house number, and landmark.
+        LocationSerializer (many=True): Handles multiple location objects related to the profile.
+            - Fields: street address, city, state, house number, landmark.
 
     Fields:
-        uid (int): Unique identifier for the profile.
         fname (str): First name of the user.
         lname (str): Last name of the user.
-        email (str): Read-only field retrieved from the related User model.
-        location (LocationSerializer): Nested serializer for location details.
-        role (str): Role assigned to the user.
+        email (str): Read-only field retrieved from the related User model via get_email().
+        location (LocationSerializer): Nested serializer for one or more location records.
+        role (str): Role assigned to the user (choice field).
         mobile_no (str): Mobile number of the user.
         user_Img (ImageField): Profile image of the user.
 
@@ -101,36 +101,57 @@ class ProfileSerializer(serializers.ModelSerializer):
         get_email(obj: Profile) -> Optional[str]:
             Returns the email of the associated User object if available.
 
-        create(validated_data: dict) -> Profile:
-            Creates a new Profile instance along with a related Location object.
-            - Extracts and creates/gets the Location from validated_data.
-            - Associates the Location with the new Profile.
-            - Returns the created Profile instance.
+        get_location(obj: Profile) -> LocationSerializer:
+            Serializes all related Location objects for the profile using the nested LocationSerializer.
 
     Returns:
-        Profile: The created or serialized Profile object.
+        Profile: The serialized Profile object with nested location and custom email field.
     """
-    
 
     email = serializers.SerializerMethodField(source="user.email", read_only=True)
-    location = LocationSerializer(required=False, allow_null=True)
+    location = LocationSerializer(many=True, required=False)
+
     class Meta:
         model = Profile
-        fields = ["fname","lname","email","location","role","mobile_no", "user_Img"]
+        fields = ["fname", "lname", "email", "location", "role", "mobile_no", "user_Img"]
 
-    def get_email(self,obj):
-        obj = cast(Profile, obj) #typehint
+    def get_location(self, obj):
+        obj = cast(Profile, obj)
+        return LocationSerializer(many=True, data=obj.location.all())
+
+    def get_email(self, obj):
+        obj = cast(Profile, obj)
         return obj.user.email if obj.user else None
+
+class ProfileUpdateLocationsSerializer(serializers.Serializer):
+    """
+    Serializer for updating a user's profile locations by replacing an old location
+    with a new one.
+
+    Nested Serializers:
+        LocationSerializer:
+            - old_location: Represents the existing location record that should be updated or replaced.
+            - new_location: Represents the new location data to be applied to the profile.
+
+    Fields:
+        old_location (LocationSerializer): The current location details associated with the profile.
+        new_location (LocationSerializer): The updated location details to replace the old location.
+
+    Use Cases:
+        - Allows clients to send both the old and new location data in a single request.
+
+    Returns:
+        dict: A validated dictionary containing both old and new location data.
+    """
+
+    old_location = LocationSerializer()
+    new_location = LocationSerializer()
+
+
     
-    def create(self, validated_data):
-        print(validated_data)
-        validated_data = cast(dict, validated_data)
-        location_data = validated_data.pop('location')
-        location_serializer = LocationSerializer(location_data)
-        location_serializer.is_valid(raise_exception= True)
-        location, _ = Location.objects.get_or_create(**location_data)
-        user_profile = Profile.objects.create(location = location,**validated_data)
-        return user_profile
+    
+    
+
     
     
  

@@ -8,15 +8,16 @@ from rest_framework.exceptions import ValidationError
 import sentry_sdk
 
 from .models import User, Profile
-from .serializers import UserSerializer, ProfileSerializer, EmailPasswordSerializer, LoginSerializer
+from .serializers import UserSerializer, ProfileSerializer, EmailPasswordSerializer, LoginSerializer, ProfileUpdateLocationsSerializer, LocationSerializer
 from app_users import services
+from app_locations import services as location_services
 
 from dotenv import load_dotenv 
 
 # Create your views here.
 load_dotenv()
-
-logger = logging.getLogger('app_users')  # will use JSON config
+logger = logging.getLogger('app_users')
+# will use JSON config
 
 
           
@@ -174,7 +175,7 @@ class LoginView(views.APIView):
             {"error": "server error occured"}
 
     Raises:
-        UserNotFound: If no user exists with the given email.
+        NotFound: If no user exists with the given email.
         AuthenticationError: If the provided password is invalid.
         Exception: For any unexpected errors during login.
     """
@@ -188,8 +189,6 @@ class LoginView(views.APIView):
                 email= data['email'],  
                 password = data['password']
             )
-
-            print(res)
             
             #refresh_token = request.COOKIES.get("refreshToken")
             if isinstance(res, dict):
@@ -204,7 +203,7 @@ class LoginView(views.APIView):
                     max_age=7*24*60*60 
                 )
             return res
-        except (services.UserNotFound, services.AuthenticationError) as e:
+        except (services.NotFound, services.AuthenticationError) as e:
             return Response({"error":str(e)}, status= status.HTTP_400_BAD_REQUEST)
         except Exception as e: 
             sentry_sdk.capture_exception(e)
@@ -245,9 +244,9 @@ class ForgetPasswordView(views.APIView):
             {"error": "<unexpected error message>"}
 
     Raises:
-        UserNotFound: If no user exists with the given email.
-        CodeNotFound: If the provided verification code does not exist.
-        InvalidCode: If the verification code is expired or already used.
+        NotFound: If no user exists with the given email.
+        NotFound: If the provided verification code does not exist.
+        Invalid: If the verification code is expired or already used.
         Exception: For any unexpected errors during processing.
     """
     permission_classes = [permissions.AllowAny]
@@ -267,12 +266,12 @@ class ForgetPasswordView(views.APIView):
                 status=status.HTTP_200_OK
                 )   
                     
-        except (services.UserNotFound, services.CodeNotFound, services.InvalidCode) as e:
+        except (services.NotFound, services.NotFound, services.Invalid) as e:
             return Response({"error": str(e)}, status=400)
         except Exception as e: 
             sentry_sdk.capture_exception(e)
             logger.exception(e)
-            print(e)
+            
             return Response({"error": str(e)}, status= status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 class ChangePasswordView(views.APIView):
@@ -309,8 +308,8 @@ class ChangePasswordView(views.APIView):
             {"error": "server error occured"}
 
     Raises:
-        UserNotFound: If no user exists with the given email.
-        InvalidCode: If the provided password or code is invalid.
+        NotFound: If no user exists with the given email.
+        Invalid: If the provided password or code is invalid.
         Exception: For any unexpected errors during processing.
     """
 
@@ -318,7 +317,6 @@ class ChangePasswordView(views.APIView):
     def post(self, request):      
          
         try: 
-            print(request.data)
             ep_serializer = EmailPasswordSerializer(data = request.data)
             ep_serializer.is_valid(raise_exception=True)
             ep_serializer_data = cast(Dict[str,Any], ep_serializer.validated_data)
@@ -337,7 +335,7 @@ class ChangePasswordView(views.APIView):
                 status=status.HTTP_200_OK
             )
         
-        except (services.UserNotFound, services.InvalidCode) as e:
+        except (services.NotFound, services.Invalid) as e:
             return Response({"error":str(e)}, status= status.HTTP_400_BAD_REQUEST)
         except Exception as e: 
             sentry_sdk.capture_exception(e)
@@ -346,23 +344,24 @@ class ChangePasswordView(views.APIView):
 
 class ListUserProfileView(generics.ListAPIView):
     """
-    API endpoint for listing all user profiles.
+    API endpoint for retrieving a list of all user profiles.
 
     Inherits:
         ListAPIView: Provides GET (list) functionality for Profile objects.
 
     Queryset:
-        Profile.objects.all(): Returns all Profile instances.
+        Profile.objects.all(): Returns all Profile instances stored in the database.
 
     Serializer:
-        ProfileSerializer: Serializes Profile model data for output.
+        ProfileSerializer: Serializes Profile model data, including nested location details
+        and custom email retrieval.
 
     Permissions:
         AllowAny: Accessible to all users without authentication.
 
     Methods:
         get(self, request, *args, **kwargs) -> Response:
-            - Returns a list of all user profiles in the system.
+            - Returns a paginated list of all user profiles.
             - Uses ProfileSerializer to format the response data.
             - Supports pagination and filtering if configured globally in DRF.
 
@@ -370,11 +369,23 @@ class ListUserProfileView(generics.ListAPIView):
         200 OK:
             [
                 {
-                    "id": int,
-                    "user": int,
-                    "bio": str,
-                    "website": str,
-                    "avatar": str
+                    "fname": str,          # First name of the user
+                    "lname": str,          # Last name of the user
+                    "email": str,          # Email from related User model
+                    "location": [          # List of related Location objects
+                        {
+                            "staddr": str,
+                            "city": str,
+                            "state": str,
+                            "hno": str,
+                            "landmark": str,
+                            "is_homeaddress": Bool
+                        },
+                        ...
+                    ],
+                    "role": int,           # Role value (Admin=1, Worker=2, Consumer=3)
+                    "mobile_no": str,      # Mobile number (unique, optional)
+                    "user_Img": str        # Path/URL to profile image
                 },
                 ...
             ]
@@ -390,13 +401,292 @@ class ListUserProfileView(generics.ListAPIView):
     serializer_class = ProfileSerializer
     permission_classes = [permissions.AllowAny]
 
-class UpdateProfileView(generics.RetrieveUpdateDestroyAPIView):
+class ManageProfileView(generics.RetrieveUpdateAPIView):
+    """
+    API endpoint for retrieving, updating, and deleting the authenticated user's profile.
+
+    Inherits:
+        RetrieveUpdateDestroyAPIView: Provides GET (retrieve), PUT/PATCH (update).
+
+    Queryset:
+        Profile.objects.all(): Base queryset for profile objects.
+
+    Serializer:
+        ProfileSerializer: Serializes Profile model data, including nested location details and custom email retrieval.
+
+    Permissions:
+        IsAuthenticated: Only accessible to authenticated users.
+
+    Methods:
+        get_object(self) -> Profile:
+            - Retrieves the Profile instance associated with the currently authenticated user.
+            - Ensures that users can only manage their own profile.
+
+        update(self, request, *args, **kwargs) -> Response:
+            - Performs a partial update of the authenticated user's profile.
+            - Validates incoming data using ProfileSerializer with `partial=True`.
+            - Saves changes to the Profile instance.
+            - Returns a success message on successful update.
+            - Captures and logs exceptions using Sentry and logger if errors occur.
+
+    Responses:
+        200 OK:
+            {"message": "Profile Updated Successfully!"}
+
+        401 Unauthorized:
+            {"detail": "Authentication credentials were not provided."}
+
+        500 Internal Server Error:
+            {"error": "server error occured"}  # If unexpected errors occur
+
+    Raises:
+        ValidationError: If provided data fails serializer validation.
+        Exception: For any unexpected errors during profile update or retrieval.
+    """
+
     permission_classes = [permissions.IsAuthenticated]
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
+    
 
     def get_object(self):
-        profile = Profile.objects.get(user = self.request.user)
+        profile = Profile.objects.get(user=self.request.user)
         return profile
 
+    def update(self, request, *args, **kwargs):
+        try:
+            profile_obj = self.get_object()
+            profile_serializer = self.serializer_class(
+                profile_obj, data=request.data, partial=True
+            )
+            profile_serializer.is_valid(raise_exception=True)
+            obj = profile_serializer.save()
+
+            return Response(
+                {"message": "Profile Updated Successfully!"},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception(e)
+            print(e)
+            return Response(
+                {"error": "server error occured"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
+class ListProfileLocationView(generics.ListAPIView):
+    """
+    API view to list all locations associated with the authenticated user's profile.
+
+    Permissions:
+        - IsAuthenticated: Only logged-in users can access their profile locations.
+
+    Serializer:
+        LocationSerializer: Serializes each Location object linked to the user's profile.
+
+    Queryset:
+        - Retrieves the Profile object for the currently authenticated user.
+        - Returns all Location objects associated with that Profile via the ManyToMany relationship.
+
+    Use Cases:
+        - Allows a user to view all saved addresses/locations tied to their profile.
+        - Useful for displaying a list of delivery addresses or saved locations in the frontend.
+
+    Returns:
+        list[Location]: A serialized list of Location objects belonging to the authenticated user.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = LocationSerializer
+
+    def get_queryset(self):
+        profile = Profile.objects.get(user=self.request.user)
+        return profile.location.all()
+    
+class AddProfileLocationView(generics.CreateAPIView):
+    """
+    API view to add a new location to the authenticated user's profile.
+
+    Permissions:
+        - IsAuthenticated: Only logged-in users can add locations to their profile.
+
+    Serializer:
+        LocationSerializer: Validates and serializes the location data provided in the request.
+
+    Methods:
+        get_object(self) -> Profile:
+            Retrieves the Profile object associated with the currently authenticated user.
+
+        create(self, request, *args, **kwargs) -> Response:
+            - Validates the incoming location data using LocationSerializer.
+            - Calls the service layer function `add_profile_location` to add the location
+              to the user's profile.
+            - Returns a success message along with the updated list of locations.
+            - Handles custom exceptions (NotFound, server errors) and logs them for debugging.
+
+    Response:
+        - 201 Created: Location added successfully, returns updated list of locations.
+        - 400 Bad Request: If the location to be added is not found.
+        - 500 Internal Server Error: For unexpected server errors.
+
+    Use Cases:
+        - Allows users to add new delivery addresses or saved locations to their profile.
+        - Ensures that location data is validated before being persisted.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = LocationSerializer
+
+    def get_object(self):
+        profile = Profile.objects.get(user=self.request.user)
+        return profile
+
+    def create(self, request, *args, **kwargs):
+        try:
+            locations_serializer = self.get_serializer(data=request.data)
+            locations_serializer.is_valid(raise_exception=True)
+            locations_serializer_data = cast(Dict[str, Any], locations_serializer.validated_data)
+
+            profile_obj = self.get_object()
+            profile_obj = services.add_profile_location(profile=profile_obj, **locations_serializer_data)
+
+            return Response(
+                {
+                    "message": "Location added successfully!",
+                    "locations": LocationSerializer(profile_obj.location.all(), many=True).data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except (services.NotFound) as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception(e)
+            return Response({"error": "server error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class DeleteProfileLocationView(generics.DestroyAPIView):
+    """
+    API view to delete one or more locations from the authenticated user's profile.
+
+    Permissions:
+        - IsAuthenticated: Only logged-in users can remove locations from their profile.
+
+    Serializer:
+        LocationSerializer (many=True): Validates the list of location objects provided
+        in the request body for deletion.
+
+    Methods:
+        get_object(self) -> Profile:
+            Retrieves the Profile object associated with the currently authenticated user.
+
+        destroy(self, request, *args, **kwargs) -> Response:
+            - Validates the incoming list of locations using LocationSerializer.
+            - Calls the service layer function `delete_profile_locations` to remove
+              the specified locations from the user's profile.
+            - Returns a success message upon completion.
+            - Handles custom exceptions (NotFound, server errors) and logs them for debugging.
+
+    Response:
+        - 200 OK: Locations deleted successfully.
+        - 400 Bad Request: If any of the specified locations do not exist.
+        - 500 Internal Server Error: For unexpected server errors.
+
+    Use Cases:
+        - Allows users to remove one or more saved addresses/locations from their profile.
+        - Useful for managing delivery addresses or cleaning up outdated location records.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = LocationSerializer
+
+    def get_object(self):
+        profile = Profile.objects.get(user=self.request.user)
+        return profile
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            locations_serializer = LocationSerializer(many=True, data=request.data)
+            locations_serializer.is_valid(raise_exception=True)
+            locations_serializer_data = cast(list[Dict[str, Any]], locations_serializer.validated_data)
+
+            profile_obj = Profile.objects.get(user=self.request.user)
+            profile_obj = services.delete_profile_locations(
+                profile=profile_obj,
+                locations_data=locations_serializer_data
+            )
+
+            return Response(
+                {"message": "Locations deleted Successfully!"},
+                status=status.HTTP_200_OK
+            )
+
+        except (services.NotFound) as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception(e)
+            return Response({"error": "server error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+class UpdateLocationView(generics.UpdateAPIView):
+    """
+    API view to update a user's profile location by replacing an old location
+    with a new one.
+
+    Permissions:
+        - IsAuthenticated: Only logged-in users can update their profile locations.
+
+    Serializer:
+        ProfileUpdateLocationsSerializer: Validates the request data containing
+        both old and new location details.
+
+    Methods:
+        get_object(self) -> Profile:
+            Retrieves the Profile object associated with the currently authenticated user.
+
+        update(self, request, *args, **kwargs) -> Response:
+            - Validates the incoming request data using ProfileUpdateLocationsSerializer.
+            - Calls the service layer function `update_profile_location` to replace
+              the old location with the new one in the user's profile.
+            - Returns a success message upon completion.
+            - Handles custom exceptions (NotFound, server errors) and logs them for debugging.
+
+    Response:
+        - 200 OK: Location updated successfully.
+        - 400 Bad Request: If the old location to be replaced does not exist.
+        - 500 Internal Server Error: For unexpected server errors.
+
+    Use Cases:
+        - Allows users to update one of their saved addresses/locations with new details.
+        - Useful for scenarios where a user moves to a new address and wants to replace
+          the old one in their profile.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        profile = Profile.objects.get(user=self.request.user)
+        return profile
+
+    def update(self, request, *args, **kwargs):
+        try:
+            location_up_serializer = ProfileUpdateLocationsSerializer(data=request.data)
+            location_up_serializer.is_valid(raise_exception=True)
+            location_up_serializer_data = cast(Dict[str, Any], location_up_serializer.validated_data)
+
+            profile_obj = self.get_object()
+            profile_obj = services.update_profile_location(profile=profile_obj, **location_up_serializer_data)
+
+            return Response(
+                {"message": "Location Updated Successfully!"},
+                status=status.HTTP_200_OK
+            )
+
+        except (services.NotFound) as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception(e)
+            return Response({"error": "server error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
