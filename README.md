@@ -1,3 +1,9 @@
+
+# 🛠️ Project Status: Active Development (Backend-First Phase)
+*Note: The core architecture is fucntional, but edge-case error handling and frontend client integration are currently being built in active sprints.*
+
+
+
 # 🥬 Veggie Vault
 
 Veggie Vault is an online grocery shopping store website (e-commerce webapp). 
@@ -221,6 +227,62 @@ pip install -r requirements.txt
 python manage.py makemigrations
 python manage.py migrate
 ```
+--------------------------------------------------------------------------------
+🔑 ENVIRONMENT CONFIGURATION (.env)
+--------------------------------------------------------------------------------
+This project requires several environment variables to function correctly. 
+Follow these steps to set up your `.env` file in the `Backend/` directory:
+
+1. Create a new file named `.env` in the `Backend/` folder.
+2. Copy the template below and fill in the values as described.
+
+## --- .env TEMPLATE ---
+
+### 1. Environment Settings
+#### Set DJANGO_ENV to 'test', 'dev', or 'prod' depending on your usage
+DJANGO_ENV=test
+DJANGO_SETTINGS_MODULE=config.settings.settings_test
+DEBUG=True
+#### Generate a random string for your secret key
+DJANGO_SECRET_KEY=your_long_random_string_here
+#### DSN provided by your GlitchTip project settings
+GLITCHTIP_DSN=
+
+### 2. Email Configuration
+#### Use your Gmail address and an "App Password" (NOT your regular login password)
+#### Generate App Password here: https://myaccount.google.com/apppasswords
+USER_EMAIL=your_name@gmail.com
+USER_EMAIL_PASSWORD=your_app_password_here
+
+### 3. Task Queue
+#### Ensure Redis is installed and running locally
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_TASK_ALWAYS_EAGER=False
+CELERY_TASK_EAGER_PROPAGATES=True
+
+### 4. Payment Gateway (Razorpay)
+#### Get these keys from your Razorpay Dashboard (Settings > API Keys)
+RAZORPAY_TEST_API_KEY=rzp_test_xxxxxx
+RAZORPAY_TEST_KEY_SECRET=your_secret_key_here
+
+--------------------------------------------------------------------------------
+⚙️ SETTINGS MANAGEMENT
+--------------------------------------------------------------------------------
+This project uses separate Django settings files for different environments.
+You can control which one is active via the `DJANGO_SETTINGS_MODULE` variable 
+in your `.env` file.
+
+* **Development:** Use `config.settings.settings_dev`
+  (Ideal for local coding, enables debug mode, local database)
+
+* **Testing:** Use `config.settings.settings_test`
+  (Used for running unit tests, uses ephemeral or test databases)
+
+* **Production:** Use `config.settings.settings_prod`
+  (Highly secure, handles static files, production database settings)
+
+To switch, simply update the line in your `.env` file:
+DJANGO_SETTINGS_MODULE=config.settings.settings_dev
 
 ## 🧪 Running the Test Suite
 

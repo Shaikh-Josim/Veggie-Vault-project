@@ -65,6 +65,10 @@ class Cart(BaseModel):
     @property 
     def total_price(self): 
         return self.product.price * self.quantity
+
+    @property 
+    def is_stock(self): 
+        return self.quantity < self.product.stock
     
     def __str__(self) -> str:
         return f"user-email: {self.profile.user.email} product: {self.product.name}"

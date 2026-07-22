@@ -6,7 +6,7 @@
             "format": "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s"
         },
         "simple": {
-            "format": "[Level:%(levelname)s |Logger-Name:%(name)s |Module:%(module)s |Line_no:%(lineno)d] \ndatetime:%(asctime)s: \nMSG:%(message)s\n\n",
+            "format": "[Level:%(levelname)s |Logger-Name:%(name)s |Module:%(module)s |Line_no:%(lineno)d] \ndatetime:%(asctime)s.ms:%(msecs)d: \nMSG:%(message)s\n\n",
             "datefmt": "Date: %Y-%m-%d Time:%H:%M:%S%z"
         },
         "json": {

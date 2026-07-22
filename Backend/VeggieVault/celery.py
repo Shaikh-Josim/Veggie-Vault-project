@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import cast
 from celery import Celery
 from celery.schedules import crontab
@@ -15,6 +16,8 @@ app.conf.beat_schedule = {
     }
 
 app.config_from_object("django.conf:settings", namespace="CELERY")
+
+
 app.autodiscover_tasks()
 
 #intervel based tasks

@@ -1,4 +1,3 @@
-import json
 from VeggieVault.settings import *
 
 
@@ -10,7 +9,6 @@ log_setter.set_test_logging_config()
 ROOT_URLCONF = "app_orders.tests.test_urls"
 
 
-# Database settings
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -18,8 +16,20 @@ DATABASES = {
     }
 }
 
+
+
+# Cache Settings
+# settings.py (At the very bottom)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake-cache",
+    }
+}
+
+
 # Celery settings
-CELERY_TASK_ALWAYS_EAGER = "True"
+CELERY_TASK_ALWAYS_EAGER = "False"
 CELERY_TASK_EAGER_PROPAGATES = "True"
 
 

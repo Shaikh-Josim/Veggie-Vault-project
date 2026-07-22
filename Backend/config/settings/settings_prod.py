@@ -9,7 +9,7 @@ from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from logging import INFO, ERROR
 
-sentry_logging = LoggingIntegration( level=INFO, 
+sentry_logging = LoggingIntegration( level=ERROR, 
 event_level= ERROR
 ) #Capturing Errors in GlitchTip
 sentry_sdk.init(

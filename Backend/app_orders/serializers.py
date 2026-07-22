@@ -2,7 +2,7 @@ import logging
 from rest_framework import serializers
 from django.core.validators import RegexValidator
 
-from app_orders.models import Orders, OrderedItem, Product, Payment
+from app_orders.models import Orders, OrderedItem, Product, Payment, Refund
 from app_products.serializers import ProductNestedSerializer
 
 logger = logging.getLogger('app_orders')
@@ -12,7 +12,7 @@ logger = logging.getLogger('app_orders')
 # ==========================================
 
 razorpay_orderid_validator = RegexValidator( 
-    regex=r'^order_[A-Za-z0-9]+$',
+    regex=r'^order_[A-Za-z0-9_]+$',
     message="Invalid Razorpay Order ID format. Must start with 'order_' followed by alphanumeric characters."
 )
 
@@ -35,7 +35,7 @@ class OrderedItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderedItem
-        fields = ["ordered_item_id", "order", "product_id", "ordered_item", "quantity", "total_price", "status"]
+        fields = ["ordered_item_id", "order", "product_id", "ordered_item", "quantity", "total_price", "item_status"]
         extra_kwargs = {
             'product_id': {'write_only': True, 'many': True},
         }
@@ -49,10 +49,11 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Orders
-        fields = ["order_id", "consumer", "amount", "razorpay_order_id", "payment_status"]
+        fields = ["order_id", "consumer", "amount", "razorpay_order_id", "order_status", "payment_mode"]
         extra_kwargs = {
             "consumer": {"read_only": True},
             "razorpay_order_id": {"required": False},  
+            "payment_mode": {"required": True},
         }
 
 
@@ -79,8 +80,23 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Payment
-        fields = ["payment_id", "order", "razorpay_payment_id", "razorpay_signature", "status"]
+        fields = ["payment_id", "order", "razorpay_payment_id", "razorpay_signature", "payment_status"]
         extra_kwargs = {
             "razorpay_signature": {"required": False},  
             "order": {"read_only": True}
+        }
+
+class RefundSerializer(serializers.ModelSerializer):
+    """
+    """
+    payment_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        source='ordered_item'
+    )
+
+    class Meta:
+        model = Refund
+        fields = ["payment_id", "payment", "razorpay_refund_id", "refund_amount", "refund_status"]
+        extra_kwargs = {              
+            'payment_id': {'write_only': True, 'many': True},
         }

@@ -7,16 +7,18 @@ import sentry_sdk
 from rest_framework import permissions, generics, views, status
 from rest_framework.response import Response
 from django.core.exceptions import ObjectDoesNotExist
+from django.utils.decorators import method_decorator
 from django.db import transaction
 
 from base import helpers
 from base.exceptions import *
-from .models import  Orders, Profile, Payment, Cart, OrderedItem
+from .models import  Orders, Profile, Payment, Cart, OrderedItem, Product, Refund
 from .serializers import OrderedItemSerializer, OrderSerializer, PaymentSerializer, RazorOrderIdSerializer
 from app_products.serializers import CartSerializer
 from app_orders.services import OrderCreationService, RAZORPAY_TEST_API_KEY, razorpay_client
+from app_orders.tasks import expire_stale_orders_task
 
-from VeggieVault.settings import RAZORPAY_TEST_KEY_SECRET
+from VeggieVault.settings import RAZORPAY_TEST_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET
 from app_orders.utils import *
 import logging
 
@@ -29,6 +31,7 @@ class GetOrderItemView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
 
 logger = logging.getLogger('app_orders')
+    
 
 class CreateOrderView(generics.CreateAPIView):
     """
@@ -42,75 +45,107 @@ class CreateOrderView(generics.CreateAPIView):
         """Helper to get the current user's profile."""
         logger.info(f"Looking up profile for user ID: {self.request.user.pk}")
         profile_obj = Profile.objects.get(user=self.request.user)
-        logger.debug(f"Found profile: {profile_obj.uid}")
+        logger.info(f"Found profile: {profile_obj.uid}") #profile uid
         return profile_obj
     
     def get_cart(self):
         """Helper to get all active cart items for this profile."""
         profile = self.get_profile_obj()
         logger.info(f"Getting cart items for profile: {profile.uid}")
-        return Cart.objects.filter(profile=profile)
+        return Cart.objects.select_related('profile__user', 'product').filter(profile=profile)
 
+    @method_decorator(helpers.require_idempotency_key(timeout=5000))
     def create(self, request, *args, **kwargs) -> Response:
         """Main method that handles the whole checkout process."""
-        logger.info(f"User {request.user.id} clicked checkout button")
+        logger.info(f"User {request.user.uid} clicked checkout button")
         
         try:
             # 1. Check and validate incoming request data
+            
             order_serializer = cast(OrderSerializer, self.get_serializer(data=request.data))
-            order_serializer.is_valid(raise_exception=True)
-            order_serializer_data = helpers.validated_dict(order_serializer)
-            
-            amount = order_serializer_data.get("amount")
-            logger.info(f"Validated order amount: INR {amount}")
+            order_serializer_data = helpers.validated_dict(serializer= order_serializer)
+            payment_mode = order_serializer_data.get('payment_mode')
 
-            # 2. Call Razorpay API (Keep this outside the DB transaction because network calls are slow)
-            logger.info("Calling Razorpay API to create an order...")
-            razorpay_order = OrderCreationService.create_razorpay_order(amount=amount)
-            order_id = razorpay_order.get('id')
-            logger.info(f"Razorpay order created successfully. ID: {order_id}")
+            amount, products_id = OrderCreationService.get_amount_from_cart(cart= self.get_cart())
+            logger.info(f"Validated order amount: INR {amount}") 
+            order_id = None # for offline (will become order id for online)
 
-            # 3. Save everything to the database safely
-            logger.info("Starting database transaction...")
+            if payment_mode == 'online':
+                #3. Call Razorpay API 
+                logger.info("Calling Razorpay API to create an order...")
+                razorpay_order = OrderCreationService.create_razorpay_order(amount=amount)
+                order_id = razorpay_order.get('id')
+                logger.info(f"Razorpay order created successfully. ID: {order_id}")
+
             with transaction.atomic():
-                profile = self.get_profile_obj()
-                
-                # Create the main Order record
-                logger.info("Saving main Order record to database...")
-                order = cast(Orders, order_serializer.save(consumer=profile, razorpay_order_id=order_id))
-                logger.debug(f"Saved Order ID: {order.uid}")
+                #lock products whose stock will be deduct
+                locked_products = Product.objects.select_for_update().filter(uid__in = products_id)
+                if len(locked_products) != len(products_id):
+                    return Response({"msg": "Some products are no longer available"}, status=status.HTTP_400_BAD_REQUEST)
 
-                # Move items from Cart format into OrderedItem format
-                logger.info("Converting cart items into ordered items data...")
-                product_data = get_products_from_cart(cart=self.get_cart(), order=order)
-                
-                logger.info(f"Saving {len(product_data)} items to OrderedItem table...")
-                orderitem_serializer = OrderedItemSerializer(data=product_data, many=True)
-                orderitem_serializer.is_valid(raise_exception=True)
-                orderitem_serializer.save()
-                logger.info("All ordered items saved successfully")
+                #2. check if stock of product is available
+                is_stock = OrderCreationService.is_cart_products_stock_available(cart = self.get_cart())
 
-                # Delete the user's cart since checkout is done
-                logger.info("Deleting items from user's cart...")
-                self.get_cart().delete()
-                logger.info("User cart cleared successfully")
+                if is_stock:
+                    # 4. Save everything to the database safely
+                    logger.info("Starting database transaction...")
+                    profile = self.get_profile_obj()
+                    
+                    # Create the main Order record
+                    logger.info("Saving main Order record to database...")
+                    order = cast(Orders, order_serializer.save(consumer=profile, razorpay_order_id=order_id, amount = amount))
+                    logger.debug(f"Saved Order ID: {order.uid}")
 
-            # 4. If everything worked, send success response to frontend
-            merchant_key = RAZORPAY_TEST_API_KEY
-            logger.info(f"Checkout finished successfully for order: {order_id}")
-            
-            return Response(
-                {
-                    "order": razorpay_order, 
-                    "order_id": order_id, 
-                    "merchant_key": merchant_key
-                },
-                status=status.HTTP_201_CREATED
-            )
+                    # Move items from Cart format into OrderedItem format
+                    logger.info("Converting cart items into ordered items data...")
+                    product_data = OrderCreationService.get_products_from_cart(cart= self.get_cart(), order=order)
+                    
+                    logger.info(f"Saving {len(product_data)} items to OrderedItem table...")
+                    orderitem_serializer = OrderedItemSerializer(data=product_data, many=True)
+                    orderitem_serializer.is_valid(raise_exception=True)
+                    orderitem_serializer.save()
+                    logger.info("All ordered items saved successfully")
+                    
+                    logger.info("Deducting stock from inventory..")
+                    OrderCreationService.deduct_stock(cart= self.get_cart())
+                    logger.info("Stock Deducted Successfully!!")
+
+                    if payment_mode == 'offline':
+                        # Delete the user's cart since checkout is done
+                        logger.info("Deleting items from user's cart...")
+                        self.get_cart().delete()
+                        logger.info("User cart cleared successfully")
+
+                        return Response(
+                            {
+                                "msg": "order created successfully"
+                            },
+                            status=status.HTTP_201_CREATED
+                        )
+
+                    # 5. If everything worked, send success response to frontend
+                    merchant_key = RAZORPAY_TEST_API_KEY
+                    logger.info(f"Checkout finished successfully for order: {order_id}")                    
+                    helpers.run_task_at(function = expire_stale_orders_task, minutes= 30, order_id = order_id)
+                    
+                    return Response(
+                        {
+                            "order": razorpay_order, 
+                            "order_id": order_id, 
+                            "merchant_key": merchant_key
+                        },
+                        status=status.HTTP_201_CREATED
+                    )
+                # return response if stock unavailable
+                return Response(
+                        {
+                            "msg": "stock unavailable "
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
         
         # Catch normal validation or missing data errors (Bad Requests)
         except (NotFound, ValueError, CreateError, ObjectDoesNotExist) as e:
-            logger.warning(f"Validation or data error during checkout: {str(e)}")
             logger.exception(str(e))
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -129,6 +164,7 @@ class CreateOrderView(generics.CreateAPIView):
                 {"error": "server error occured"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )        
+    
 
 class VerifyPaymentView(generics.CreateAPIView):
     """
@@ -144,38 +180,34 @@ class VerifyPaymentView(generics.CreateAPIView):
         logger.debug(f"Found profile: {profile_obj.uid}")
         return profile_obj
 
-    def get_orders(self):
+    def get_order_obj(self):
         """Helper to fetch all orders belonging to this user."""
         profile_obj = self.get_profile_obj()
         orders = Orders.objects.filter(consumer=profile_obj)
         logger.info(f"Found {orders.count()} order records for profile: {profile_obj.uid}")
         return orders
     
+    @method_decorator(helpers.require_idempotency_key(timeout=10))
     def post(self, request) -> Response:
         """Handles incoming checkout payment verification confirmation."""
         logger.info(f"User {request.user.pk} submitted payment signature verification")
         
         try:
-            # 1. Isolate and validate the Razorpay Order ID from the request
+            # 1. validate the Razorpay Order ID from the request
             razor_order_id_serializer = RazorOrderIdSerializer(data={"razorpay_order_id": request.data.get("razorpay_order_id")})
+            logger.info(f"request-data {request.data}\n orderid: {request.data.get("razorpay_order_id")}")
             razor_order_id_serializer.is_valid(raise_exception=True)
             razor_order_id_serializer_data = helpers.validated_dict(razor_order_id_serializer)
             order_id = razor_order_id_serializer_data.get("razorpay_order_id")
             
-            # Fetch the matching order belonging specifically to this authenticated user
-            logger.info(f"Searching for order string matching token: {order_id}")
-            order = cast(Orders, self.get_orders().get(razorpay_order_id=order_id))
             
-            # 2. Extract and validate signature payload items
-            payment_serializer = cast(PaymentSerializer, self.get_serializer(data=request.data))
+            # 2. get and validate signature payload items from request
+            payment_serializer = cast(PaymentSerializer, self.get_serializer(data=request.data))    
             payment_serializer.is_valid(raise_exception=True)
             payment_serializer_data = helpers.validated_dict(payment_serializer)
             
             payment_id = payment_serializer_data.get("razorpay_payment_id")
             signature = payment_serializer_data.get("razorpay_signature")
-            
-            # Look up if this payment item transaction row was created earlier
-            payment_obj = Payment.objects.filter(razorpay_payment_id=payment_id).first()
             
             # 3. Security Check: Call Razorpay SDK utility to authenticate the digital signature
             logger.info("Verifying payload signature using Razorpay Client...")
@@ -186,25 +218,39 @@ class VerifyPaymentView(generics.CreateAPIView):
             })
             logger.info("Signature verification passed.")
 
-            # If the payment row already exists, update it instead of creating a duplicate
-            if payment_obj:
-                logger.info(f"Existing payment record found for ID: {payment_id}. Updating instance.")
-                payment_serializer = PaymentSerializer(instance=payment_obj, data=request.data, partial=True)
-                payment_serializer.is_valid(raise_exception=True)
 
-            payment = payment_serializer.save(order=order, razorpay_payment_id=payment_id, status=Payment.Status.CREATED)
-            
+            # Look up if this payment item transaction row was created earlier
+            with transaction.atomic():
+                # Fetch the matching order belonging specifically to this authenticated user
+                logger.info(f"Searching for order string matching token: {order_id}")
+                order_obj = cast(Orders, self.get_order_obj().select_for_update().get(razorpay_order_id=order_id))
+
+                payment_obj = Payment.objects.filter(razorpay_payment_id=payment_id).first()
+            # If the payment row already exists, update it instead of creating a duplicate
+                if payment_obj:
+                    return Response({"msg": "order payment already done"}, status=status.HTTP_202_ACCEPTED)
+
+                payment = payment_serializer.save(order=order_obj, razorpay_payment_id=payment_id, payment_status=Payment.Status.CREATED)
+                
             # 4. Request the direct transaction state status explicitly from Razorpay servers
             logger.info(f"Fetching current payment status from remote server for: {payment_id}")
-            payment_status = client.payment.fetch(payment_id)
+            payment_status = razorpay_client.payment.fetch(payment_id)
             current_status = payment_status.get("status")
             logger.info(f"Remote server returned current transaction state status: {current_status}")
 
             # 5. Handle Action: Success Workflow
             if current_status == "captured":
-                logger.info(f"Payment capture confirmed. Updating tracking rows to PAID for Order: {order.uid}")
-                OrderCreationService.order_payment(order=order, payment=payment, status="captured")
-                return Response({"msg": "order payment is done successfully"}, status=status.HTTP_202_ACCEPTED)
+
+                #if order is not expired
+                if order_obj.order_status == 'expired':
+                    OrderCreationService.refund_expired_order_payment(razorpay_payment_id= payment_id)
+                    
+                elif order_obj.order_status == 'not_paid':
+                    logger.info(f"Payment capture confirmed. Updating tracking rows to PAID for Order: {order_obj.uid}")
+                    OrderCreationService.process_order_payment(order=order_obj, payment=payment, payment_status="captured")
+                    return Response({"msg": "order payment is done successfully"}, status=status.HTTP_202_ACCEPTED)
+            
+                #if order expired
             
             # 6. Handle Action: Failure Reversion Workflow
             elif current_status == "failed":
@@ -212,17 +258,18 @@ class VerifyPaymentView(generics.CreateAPIView):
                 
                 # Wrap database rollback actions inside a safe atomic block
                 with transaction.atomic():
-                    OrderCreationService.order_payment(order=order, payment=payment, status="failed")
+                    OrderCreationService.process_order_payment(order=order_obj, payment=payment, payment_status="failed")
                     
                     # Convert ordered items back into cart items
-                    ordered_items = OrderedItem.objects.filter(order=order)
-                    products_data = get_products_from_ordereditem(ordered_items)
+                    ordered_items = OrderedItem.objects.filter(order=order_obj)
+                    products_data = OrderCreationService.get_products_from_ordereditem(ordered_items)
 
+                    #move ordered items back to cart
                     cart_serializer = CartSerializer(data=products_data, many=True)
                     cart_serializer.is_valid(raise_exception=True)
                     cart_serializer.save()
                     
-                    # Remove the failed ordered items row logs
+                    # Remove the failed ordered items row from db 
                     ordered_items.delete()
                     logger.info("Items restored back to the user's active cart. OrderedItem entries cleaned up.")
 
@@ -265,8 +312,10 @@ class RazorpayWebhookAPIView(views.APIView):
         logger.debug(f"Found order instance: {order_obj.uid}")
         return order_obj
 
+    @method_decorator(helpers.require_idempotency_key(timeout=10))
     def post(self, request, *args, **kwargs) -> Response:
         """Processes incoming event payloads sent by Razorpay."""
+        body = request.body
         data = cast(Dict[str, Any], request.data)
         event = data.get('event')
         
@@ -287,33 +336,66 @@ class RazorpayWebhookAPIView(views.APIView):
             razor_order_id_serializer.is_valid(raise_exception=True)
             razor_order_id_serializer_data = helpers.validated_dict(razor_order_id_serializer)
             order_id = razor_order_id_serializer_data.get("razorpay_order_id")
-            
-            # Fetch the actual order model row
-
-            order = self.get_order_obj(rz_order_id= str(order_id)) 
 
             # 3. Validate and record the payment details
             payment_serializer = PaymentSerializer(data={'razorpay_payment_id': rz_paymentid})
             payment_serializer.is_valid(raise_exception=True)
             payment_serializer_data = helpers.validated_dict(payment_serializer)
             payment_id = payment_serializer_data.get("razorpay_payment_id")
-            
-            # Check if we already created a payment entry earlier for this ID
-            payment_obj = Payment.objects.filter(razorpay_payment_id=payment_id).first()
 
-            if payment_obj:
-                logger.info(f"Payment {payment_id} already exists in DB. Updating row.")
-                payment_serializer = PaymentSerializer(instance=payment_obj, data=request.data, partial=True)
-                payment_serializer.is_valid(raise_exception=True)
+
+            """
+            # webhook verification
+            razorpay_client.utility.verify_webhook_signature(
+                request.body.decode(),
+                request.headers["X-Razorpay-Signature"],
+                RAZORPAY_WEBHOOK_SECRET,
+            )
+            """
+
+            print('body: ', body)
+            res = razorpay_client.utility.verify_webhook_signature(
+                body.decode(),
+                request.headers["X-Razorpay-Signature"],
+                RAZORPAY_WEBHOOK_SECRET,
+            )
+            print(res)
             
-            # Save the payment record tracking row
-            payment = cast(Payment, payment_serializer.save(order=order, status=Payment.Status.CREATED))
+            
+
+            with transaction.atomic():
+                # Fetch the actual order model row
+
+                #order = self.get_order_obj(rz_order_id= str(order_id))
+                order = Orders.objects.select_for_update().get(razorpay_order_id= str(order_id))
+            
+                # Check if we already created a payment entry earlier for this ID
+                payment_obj = Payment.objects.filter(razorpay_payment_id=payment_id).first()
+
+                if payment_obj:
+                    return Response({"msg": "order payment already done"}, status=status.HTTP_202_ACCEPTED)
+                    
+                # Save the payment record tracking row
+                payment = cast(Payment, payment_serializer.save(order=order, payment_status=Payment.Status.CREATED))
 
             # 4. ACTION: If Razorpay says the order is fully paid
             if event == 'order.paid':    
                 logger.info(f"Event matches success state. Updating order {order.uid} to PAID status.")
-                OrderCreationService.process_order_payment(order=order, payment=payment, status="captured")
-                return Response({"msg": "order payment is done successfully"}, status=status.HTTP_200_OK)
+
+                if order.order_status == 'expired':
+                    OrderCreationService.refund_expired_order_payment(razorpay_payment_id= payment_id)
+                    return Response({"msg": "Got payment for expired order, refund is initiated"}, status=status.HTTP_202_ACCEPTED)
+                    
+                elif order.order_status == 'not_paid':
+                    logger.info(f"Payment capture confirmed. Updating tracking rows to PAID for Order: {order.uid}")
+                    OrderCreationService.process_order_payment(order=order, payment=payment, payment_status="captured")
+                    return Response({"msg": "order payment is done successfully"}, status=status.HTTP_202_ACCEPTED)
+                else:
+                    logger.error(f"Unexpected order status: {order.order_status}")
+                    return Response(
+                        {"error": "Unexpected order state"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             
             # 5. ACTION: If Razorpay says the payment completely failed
             elif event == 'payment.failed':
@@ -321,11 +403,11 @@ class RazorpayWebhookAPIView(views.APIView):
                 
                 # Wrap the inventory reversal database tasks inside an isolated safe atomic block
                 with transaction.atomic():
-                    OrderCreationService.process_order_payment(order=order, payment=payment, status="failed")
+                    OrderCreationService.process_order_payment(order=order, payment=payment, payment_status="failed")
                     
                     # Fetch items tied to the order and map them back to standard cart records
                     ordered_items = OrderedItem.objects.filter(order=order)
-                    products_data = get_products_from_ordereditem(ordered_items)
+                    products_data = OrderCreationService.get_products_from_ordereditem(ordered_items=ordered_items)
 
                     cart_serializer = CartSerializer(data=products_data, many=True)
                     cart_serializer.is_valid(raise_exception=True)

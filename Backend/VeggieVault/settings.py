@@ -113,10 +113,6 @@ WSGI_APPLICATION = 'VeggieVault.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default (sqllite)': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    },
     'default':{
         'ENGINE': 'django.db.backends.mysql',
         'NAME':'VeggieVault',
@@ -174,6 +170,20 @@ MEDIA_URL = '/media/'
 AUTH_USER_MODEL = "app_users.User"   # example if your custom model is User in app 'api'
 
 
+# Cache Settings
+# settings.py
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1", 
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}
+
+
 #restframework settings
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -226,3 +236,4 @@ CELERY_TIMEZONE = 'Asia/Kolkata'
 
 RAZORPAY_TEST_API_KEY = os.getenv('RAZORPAY_TEST_API_KEY')
 RAZORPAY_TEST_KEY_SECRET = os.getenv('RAZORPAY_TEST_KEY_SECRET')
+RAZORPAY_WEBHOOK_SECRET = os.getenv('RAZORPAY_TEST_WEBHOOK_SECRET')
