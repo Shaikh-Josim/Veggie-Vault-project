@@ -176,7 +176,7 @@ AUTH_USER_MODEL = "app_users.User"   # example if your custom model is User in a
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/1", 
+        "LOCATION": os.getenv('REDIS_CACHE_URL'), 
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
         }
@@ -196,8 +196,8 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "USER_ID_FIELD": "uid",
 }
 
@@ -237,3 +237,4 @@ CELERY_TIMEZONE = 'Asia/Kolkata'
 RAZORPAY_TEST_API_KEY = os.getenv('RAZORPAY_TEST_API_KEY')
 RAZORPAY_TEST_KEY_SECRET = os.getenv('RAZORPAY_TEST_KEY_SECRET')
 RAZORPAY_WEBHOOK_SECRET = os.getenv('RAZORPAY_TEST_WEBHOOK_SECRET')
+

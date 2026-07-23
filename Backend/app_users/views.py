@@ -12,12 +12,9 @@ from .serializers import UserSerializer, ProfileSerializer, EmailPasswordSeriali
 from app_users import services
 from app_locations import services as location_services
 
-from dotenv import load_dotenv 
-
 # Create your views here.
-load_dotenv()
+
 logger = logging.getLogger('app_users')
-# will use JSON config
 
 
           

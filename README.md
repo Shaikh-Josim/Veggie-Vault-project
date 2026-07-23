@@ -344,7 +344,7 @@ You can manage store data, inventory, and user records directly through the buil
 * **URL:** `http://127.0.0.1:8000/admin/`
 * **Default Credentials:** Use the admin account created by the `fill_dummy_data.py` script:
   * **Email:** `admin@example.com`
-  * **Password:** `admin123`
+  * **Password:** `admin24`
 * **Create Your Own:** If you prefer to create your own administrative account, run the following command from the `Backend/` directory:
   ```bash
   python manage.py createsuperuser

@@ -10,8 +10,8 @@ from django_celery_beat.models import PeriodicTask, IntervalSchedule, CrontabSch
 from .services import OrderCreationService
 
 #run task with
-#celery -A VeggieVault worker -l info --pool=solo
-#celery -A proj beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler    
+# celery -A VeggieVault worker -l info --pool=gevent
+# celery -A proj beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler    
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={"max_retries": 3})
 def expire_stale_orders_task(self, *args, **kwargs):

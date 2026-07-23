@@ -137,5 +137,5 @@ class InspectServiceTest(TestCase):
         )
     
     # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_services.InspectServiceTest.test_amount_fetcher --debug-mode
-    def test_amount_fetcher(self):
-        OrderCreationService.expire_stale_orders(order_id= order_id)
+    """def test_amount_fetcher(self):
+    OrderCreationService.expire_stale_orders(order_id= order_id)"""

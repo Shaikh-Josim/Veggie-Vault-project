@@ -25,7 +25,7 @@ class ProfileModelTest(TestCase):
 
     def test_str_representation(self):
         user = User.objects.create(email ="abc@example.com", password ='a1234')
-        location = Location.objects.create(staddr = 'heien era', city = 'tokyo', state = 'nigga')
+        location = Location.objects.create(staddr = 'heien era', city = 'tokyo', state = '')
         profile = Profile.objects.create(user = user, location = location)
         print(str(profile))
         print()
@@ -33,7 +33,7 @@ class ProfileModelTest(TestCase):
 
     def test_user_obj_values(self):
         user = User.objects.create(email ="abc@example.com", password ='a1234')
-        location = Location.objects.create(staddr = 'heien era', city = 'tokyo', state = 'nigga')
+        location = Location.objects.create(staddr = 'heien era', city = 'tokyo', state = '')
         print(str(location))
         profile = Profile.objects.create(
         user = user,
