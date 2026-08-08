@@ -1,89 +1,105 @@
+
+
+
 from django.test import TestCase
-from app_users.models import User, Profile
+from django.core.exceptions import ValidationError
+from app_users.models import User, Profile, EmailVerificationCode
 from app_locations.models import Location
 from app_products.models import Product, Cart
 from testing_data.fill_dummy_data import fill_database
-#run test using
-#python manage.py test app_users.tests.test_models
-#python .\manage.py test app_users.tests.test_models.ProfileModelTest.test_profile_location
 
+import logging
+
+
+logger = logging.getLogger('app_users')
+
+# run class test using
+# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_users.tests.test_models.UserModelTest --debug-mode
 class UserModelTest(TestCase):
 
-    def test_str_representation(self):
-        user = User.objects.create(email ="abc@example.com", password ='a1234')
-        print(user.email)
-        self.assertEqual(str(user), "user-email:abc@example.com")
+    # run this func test with command:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_users.tests.test_models.UserModelTest.test_user_obj --debug-mode
+    def test_user_obj(self):
+        logger.info('Testing user obj..')
+        user = User.objects.create(email = 'abc@example.com', password = 'abc1234') 
+        print(f'CREATED USER INFO:{user.__str__()}')
 
-    def test_user_obj_values(self):
-        user = User.objects.create(email ="abc@example.com", password ='a1234')
-        print(user.email)
-        print(user.password)
-        print()
-        #self.assertEqual(str(user), "user-email:abc@example.com")
+        bad_user = User.objects.create(email = 'abc@examplecom', password = 'abc1234') 
 
+        self.assertEqual('abc@example.com', user.email, msg= 'user email is not matching')
+        self.assertTrue(user.password.startswith('pbkdf2_'), msg= 'password is not hashed')
+        self.assertRaises(ValidationError, bad_user.full_clean)
+
+        logger.info('error test succeed')
+
+# run this class test with command:
+# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_users.tests.test_models.ProfileModelTest --debug-mode
 class ProfileModelTest(TestCase):
 
-    def test_str_representation(self):
-        user = User.objects.create(email ="abc@example.com", password ='a1234')
-        location = Location.objects.create(staddr = 'heien era', city = 'tokyo', state = '')
-        profile = Profile.objects.create(user = user, location = location)
-        print(str(profile))
-        print()
-        self.assertEqual(str(profile), "user name:  \n user-email: abc@example.com")
+    user_data = {"email": "abc@example.com", "password": "abc1234"}
+    location_data = [
+    { "staddr": "123 Baker Street", "city": "Springfield", "state": "California", "hno": "42", "landmark": "Near Central Park", "is_homeaddress": True }, 
+    {"staddr":"12 main Street","city":"Autumnfield", "state":"California", "hno":"2", "landmark":"Near Dolphin Park", "is_homeaddress": True } ]
+    profile_data = { "fname" : 'abc', "lname" : 'xyz', "role" : Profile.Role.CONSUMER, "mobile_no" : '1234567890', "user_Img" : 'userimg',} 
 
-    def test_user_obj_values(self):
-        user = User.objects.create(email ="abc@example.com", password ='a1234')
-        location = Location.objects.create(staddr = 'heien era', city = 'tokyo', state = '')
-        print(str(location))
-        profile = Profile.objects.create(
-        user = user,
-        fname = 'thukuna',
-        lname = 'ryomen',
-        location = location,
-        #role = '1',
-        mobile_no = '1234567890')
-        p = Profile.objects.filter(mobile_no = 1234567890)
-        print(p.values())
-        print()
-        #self.assertEqual(str(user), "user-email:abc@example.com")
 
-    def test_profile_validation(self):
-        user = User.objects.create(email ="abc@example.com", password ='a1234')
-        p = Profile.objects.create(user = user, mobile_no = 'abc')
-        p.full_clean()
+    # run this func test with command:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_users.tests.test_models.ProfileModelTest.test_profile_obj --debug-mode
+    def test_profile_obj(self):
+        logger.info('Testing profile obj..')
 
-    def test_profile_location(self):
-        user = User.objects.create(email = "jhon@domain.com", password = "jhon1234")
-        user.save()
-        location1 = Location( staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park", is_homeaddress = True )
-        location2 = Location( staddr="12 main Street", city="Autumnfield", state="California", hno="2", landmark="Near Dolphin Park", is_homeaddress = True )
-        location1.save()
-        location2.save()
-        profile = Profile( user=user, fname="John", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="9876543210", user_Img=None)
-        profile.save()
-        profile.location.add(location1,location2)
-        l = profile.location.filter(is_homeaddress=True)
-        print(l)
+        user = User.objects.create( **self.user_data )
 
-    def test_location_M2M(self):
-        user = User.objects.create(email = "jhon@domain.com", password = "jhon1234")
-        user.save()
-        location1 = Location( staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park", is_homeaddress = True )
-        location2 = Location( staddr="12 main Street", city="Autumnfield", state="California", hno="2", landmark="Near Dolphin Park", is_homeaddress = True )
-        location1.save()
-        location2.save()
-        location3, _ = Location.objects.get_or_create( staddr="12 main Street", city="Autumnfield", state="California", hno="2", landmark="Near Dolphin Park", is_homeaddress = True )
-        print("newly created: ", _)
-        profile = Profile( user=user, fname="John", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="9876543210", user_Img=None)
-        profile.save()
-        print("before adding same 3rd location to profile")
-        profile.location.add(location1,location2)
-        l = profile.location.all()
-        print(l)
-        print("after adding same 3rd location to profile")
-        profile.location.add(location3)
-        l = profile.location.all()
-        print(l)
+        location1 , location2 = Location.objects.create(**self.location_data[0] ), Location.objects.create(**self.location_data[1])
+        
+        profile = Profile.objects.create( user = user, **self.profile_data )
+
+        profile.location.add(location1, location2)
+        print("CREATED PROFILE INFO:",profile.__debug_str__())
+
+        bad_user = User.objects.create( email = 'acbe@example.com', password = '12323')
+        bad_profile = Profile.objects.create(
+                    user = bad_user,
+                    fname = 'abc12',
+                    lname = 'xyz3',
+                    role = Profile.Role.CONSUMER,
+                    mobile_no = '1234567890a',
+                    user_Img = 'userimg',
+                )
+
+        self.assertEqual('abc xyz', profile.fname+' '+profile.lname, msg= 'profile full name is not matching')
+        self.assertRaises(ValidationError, bad_profile.full_clean)
+
+# run this class test with command:
+# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_users.tests.test_models.EmailVerificationCodeModelTest --debug-mode
+class  EmailVerificationCodeModelTest(TestCase):
+    import random, string
+    import datetime
+    from django.utils import timezone
+    
+    user_data = {"email": "abc@example.com", "password": "abc1234"}
+    email_vc_data = {"code": ''.join(random.choices(string.ascii_letters + string.digits, k=6)), "expires_at": timezone.now()+datetime.timedelta(minutes= 2)}
+
+
+    # run this func test with command:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_users.tests.test_models.EmailVerificationCodeModelTest.test_profile_obj --debug-mode
+    def test_profile_obj(self):
+        logger.info('Testing email verification code obj..')
+
+        user = User.objects.create( **self.user_data )
+
+        email_vc_obj = EmailVerificationCode.objects.create(user = user, **self.email_vc_data)
+        print("CREATED EMAILVERIFICATIONCODE INFO:",email_vc_obj.__debug_str__())
+
+        bad_user = User.objects.create( email = 'acbe@example.com', password = '12323')
+        bad_email_vc = EmailVerificationCode.objects.create(
+                    user = bad_user,
+                    code = '-w9e99e',
+                    expires_at = self.timezone.now() + self.datetime.timedelta(minutes= 2)
+                )
+
+        self.assertIsNotNone(email_vc_obj)
+        self.assertRaises(ValidationError, bad_email_vc.full_clean)
 
 
 class CartModelTest(TestCase):

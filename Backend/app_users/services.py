@@ -214,8 +214,6 @@ def check_email(email:str)-> User|None:
     except ValidationError:
         raise ValidationError("Invalid email format")
 
-
-
 def update_profile_location(profile: Profile, **location_data) -> Profile:
     """
     Service function to update a user's profile location by replacing an old location
@@ -273,7 +271,6 @@ def update_profile_location(profile: Profile, **location_data) -> Profile:
     except Exception as e:
         logger.exception(str(e))
         raise UpdateError("Update Failed")
-
 
 def delete_profile_locations(profile: Profile, locations_data: list[Dict[str, Any]]) -> Profile:
     """
@@ -360,3 +357,4 @@ def add_profile_location(profile: Profile, **location_data) -> Profile:
     except Exception as e:
         logger.exception(str(e))
         raise CreateError("Location addition Failed")
+ 

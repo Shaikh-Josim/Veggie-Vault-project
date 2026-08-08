@@ -6,8 +6,7 @@ from VeggieVault.settings import *
 log_setter.set_test_logging_config()
 
 #url_settings
-ROOT_URLCONF = "app_orders.tests.test_urls"
-
+ROOT_URLCONF = "config.settings.test_urls"
 
 DATABASES = {
     "default": {

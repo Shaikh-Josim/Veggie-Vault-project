@@ -19,7 +19,6 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.urls import path, include
-import api, app_locations, app_products, app_users, app_orders
 
 urlpatterns = [
     path('admin/', admin.site.urls),
