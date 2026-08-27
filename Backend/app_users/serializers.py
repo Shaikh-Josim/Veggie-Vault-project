@@ -12,6 +12,7 @@ password_validator = RegexValidator(
     message = "Password must be at least 8 characters long and contain only letters, numbers, or @#$%%&_"
     )
 
+
 class EmailPasswordSerializer(serializers.Serializer):
     """
     Serializer for handling user password change requests.

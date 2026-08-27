@@ -20,25 +20,15 @@ from app_users.models import User, Profile
 from app_products.models import Product, Cart
 from app_locations.models import Location
 from app_orders.models import Orders, OrderedItem, Payment
-from VeggieVault.settings import RAZORPAY_TEST_API_KEY, RAZORPAY_TEST_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET
-from config.settings import settings_test
-
+from config.settings.settings_test import RAZORPAY_TEST_API_KEY, RAZORPAY_TEST_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET
 
 import logging
 
 logger = logging.getLogger('app_orders')
 
 
-MYSQL_DB = {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME':'Test',
-        'USER':'root',
-        'PASSWORD':'',
-        'HOST':'127.0.0.1',
-        'PORT':'3306',
-    }
-# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_cases.OrderOperationsTest --debug-mode
 
+# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_cases.OrderOperationsTest --debug-mode
 class OrderOperationsTest(
         #TestCase
         LiveServerTestCase                     

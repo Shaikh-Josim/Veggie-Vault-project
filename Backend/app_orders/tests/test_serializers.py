@@ -1,147 +1,148 @@
+import logging
 import json
+import copy
 from decimal import Decimal
 from typing import Any, cast
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.test import TestCase
 
-from app_orders.serializers import OrderedItemSerializer, OrderSerializer
-from app_orders.models import OrderedItem, Product, Profile, Orders
+from app_orders.serializers import OrderedItemSerializer, OrderSerializer, RazorOrderIdSerializer, PaymentSerializer, RefundSerializer
+from app_orders.models import OrderedItem, Product, Profile, Orders, Payment, Refund
 from app_locations.models import Location
 from app_users.models import User
 from app_products.models import Cart
+from base.helpers import pop_update_dict_data
+from base.tests.test_data import user1_data, profile1_data, location1_data, product1_data, order1_data, ordereditem1_data, payment1_data, refund1_data
 
-# Run this specific test suite with:
-# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_serializers.OrderedItemSerializerTest --debug-mode
+logger = logging.getLogger('app_orders')
 
-class OrderedItemSerializerTest(TestCase):
-    """
-    Test suite to validate serialization and deserialization patterns 
-    for Orders and OrderedItem schemas.
-    """
-    
-    def setUp(self) -> None:
-        """Initializes testing records across required database tables."""
-        self.setUser()
-        self.setProducts()
-        self.setCart()
-        self.setOrders()
-        self.setOrderedItem()
+# run this class test with command:
+# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_serializers.OrderSerializerTest --debug-mode
+class OrderSerializerTest(TestCase):
 
-    def setUser(self) -> None:
-        """Generates mock User, Location, and User Profile data."""
-        user = User.objects.create(email="john@domain.com", password="john1234")
-        user.save()
-        user2 = User.objects.create(email="brian@domain.com", password="brian1234")
-        user2.save()
+    # run this func test with command:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_serializers.OrderSerializerTest.test_ordered_item_serializer --debug-mode
+    def test_ordered_item_serializer(self):
+        logger.info("\n-----------ORDERED ITEM SERIALIZER TEST-----------")
+
+        self.user = User.objects.create(**user1_data)
+        self.location = Location.objects.create(**location1_data)
+        self.profile = Profile.objects.create(user = self.user, **profile1_data)
+        self.profile.location.add(self.location)
+        self.product = Product.objects.create(**pop_update_dict_data(copy.deepcopy(product1_data))) 
+        self.order = Orders.objects.create(consumer = self.profile, **order1_data)
+        oi = OrderedItem.objects.create(order = self.order, ordered_item = self.product, **ordereditem1_data)
+        ordered_item_deserializer = OrderedItemSerializer(oi)
+        print("Deserialization| valid data: ", ordered_item_deserializer.data )
+
+        ordered_item_serializer = OrderedItemSerializer(data = pop_update_dict_data(copy.deepcopy(ordereditem1_data), overrides= {'order': self.order.uid, 'product_id': self.product.uid}))        
+        print("Serialization|  valid data: ",ordered_item_serializer.is_valid(), "\n serialized data:", ordered_item_serializer.validated_data)
+        print(ordered_item_serializer.errors)
+
+        bad_ordered_item_data = pop_update_dict_data(copy.deepcopy(ordereditem1_data), overrides={'quantity': 'ahbnc'})
+        bad_ordered_item_serializer = OrderedItemSerializer(data = bad_ordered_item_data)
+
+        self.assertTrue(ordered_item_serializer.is_valid())
+        self.assertFalse(ordered_item_serializer.errors)
+        self.assertFalse(bad_ordered_item_serializer.is_valid())
+        self.assertTrue(bad_ordered_item_serializer.errors)
+
+
+    # run this func test with command:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_serializers.OrderSerializerTest.test_order_serializer --debug-mode
+    def test_order_serializer(self):
+        logger.info("\n-----------ORDER SERIALIZER TEST-----------")
+
+        order_serializer = OrderSerializer(data = order1_data)
+        print("Serialization|  valid data: ",order_serializer.is_valid(), "\n serialized data:", order_serializer.validated_data)
+        print(order_serializer.errors)
+
+        self.user = User.objects.create(**user1_data)
+        self.location = Location.objects.create(**location1_data)
+        self.profile = Profile.objects.create(user = self.user, **profile1_data)
+        self.profile.location.add(self.location)
+        self.product = Product.objects.create(**pop_update_dict_data(copy.deepcopy(product1_data))) 
+        self.order = Orders.objects.create(consumer = self.profile, **order1_data)
+        order_deserializer = OrderSerializer(self.order)
+        print("Deserialization| valid data: ", order_deserializer.data )
+
+        bad_order_data = pop_update_dict_data(copy.deepcopy(order1_data), overrides={'order_status': 'abc_mode'})
+        bad_order_serializer = OrderSerializer(data = bad_order_data)
+
+        self.assertTrue(order_serializer.is_valid())
+        self.assertFalse(order_serializer.errors)
+        self.assertFalse(bad_order_serializer.is_valid())
+        self.assertTrue(bad_order_serializer.errors)
+
+    # run this func test with command:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_serializers.OrderSerializerTest.test_razorpay_order_serializer --debug-mode
+    def test_razorpay_order_serializer(self):
+        logger.info("\n-----------ORDER SERIALIZER TEST-----------")
+
+        razorpay_order_serializer = RazorOrderIdSerializer(data = pop_update_dict_data(copy.deepcopy(order1_data), remove_keys= ['consumer', 'amount', 'order_status', 'payment_mode' ]))
+        print("Serialization|  valid data: ",razorpay_order_serializer.is_valid(), "\n serialized data:", razorpay_order_serializer.validated_data)
+        print(razorpay_order_serializer.errors)
+
+        bad_razorpay_order_data = pop_update_dict_data(copy.deepcopy(order1_data), remove_keys= ['consumer', 'amount', 'order_status', 'payment_mode' ], overrides={'razorpay_order_id': 'abc'})
+        bad_razorpay_order_serializer = RazorOrderIdSerializer(data = bad_razorpay_order_data)
+
+        self.assertTrue(razorpay_order_serializer.is_valid())
+        self.assertFalse(razorpay_order_serializer.errors)
+        self.assertFalse(bad_razorpay_order_serializer.is_valid())
+        self.assertTrue(bad_razorpay_order_serializer.errors)
+
+    # run this func test with command:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_serializers.OrderSerializerTest.test_payment_serialzer --debug-mode
+    def test_payment_serialzer(self):
+        logger.info("\n-----------PAYMENT SERIALIZER TEST-----------")
+
+        self.user = User.objects.create(**user1_data)
+        self.profile = Profile.objects.create(user = self.user, **profile1_data)
+        self.order = Orders.objects.create(consumer = self.profile, **order1_data)
+
+        payment_serializer = PaymentSerializer(data = payment1_data)
+        print("Serialization|  valid data: ",payment_serializer.is_valid(), "\n serialized data:", payment_serializer.validated_data)
+        print(payment_serializer.errors)
+
+        self.payment = Payment.objects.create(order = self.order, **payment1_data)
+        payment_deserializer = PaymentSerializer(self.payment)
+        print("Deserialization| valid data: ", payment_deserializer.data )
         
-        location1 = Location(staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park", is_homeaddress=True)
-        location2 = Location(staddr="12 main Street", city="Autumnfield", state="California", hno="2", landmark="Near Dolphin Park", is_homeaddress=False)
-        location1.save()
-        location2.save()
+
+        bad_payment_data = pop_update_dict_data(copy.deepcopy(payment1_data), overrides={'payment_status': 'abc'})
+        bad_payment_serializer = RazorOrderIdSerializer(data = bad_payment_data)
+
+        self.assertTrue(payment_serializer.is_valid())
+        self.assertFalse(payment_serializer.errors)
+        self.assertFalse(bad_payment_serializer.is_valid())
+        self.assertTrue(bad_payment_serializer.errors)
+
+    # run this func test with command:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_serializers.OrderSerializerTest.test_refund_serialzer --debug-mode
+    def test_refund_serialzer(self):
+        logger.info("\n-----------REFUND SERIALIZER TEST-----------")
+        fields = ["payment_id", "payment", "razorpay_refund_id", "refund_amount", "refund_status"]
+
+        self.user = User.objects.create(**user1_data)
+        self.profile = Profile.objects.create(user = self.user, **profile1_data)
+        self.order = Orders.objects.create(consumer = self.profile, **order1_data)
+        self.payment = Payment.objects.create(order = self.order, **payment1_data)
+
+        refund_serializer = RefundSerializer(data = pop_update_dict_data(copy.deepcopy(refund1_data), overrides={'payment': self.payment.uid}))
+        print("Serialization|  valid data: ",refund_serializer.is_valid(), "\n serialized data:", refund_serializer.validated_data)
+        print(refund_serializer.errors)
+
+
+        self.refund = Refund.objects.create(payment = self.payment, **refund1_data)
+        refund_deserializer = RefundSerializer(self.refund)
+        print("Deserialization| valid data: ", refund_deserializer.data )
         
-        self.profile = Profile(user=user, fname="John", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="9876543210", user_Img=None)
-        self.profile.save()
-        self.profile.location.add(location1, location2)
 
-        self.profile2 = Profile(user=user2, fname="Brian", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="98576543210", user_Img=None)
-        self.profile2.save()
+        bad_refund_data = pop_update_dict_data(copy.deepcopy(refund1_data), overrides={'refund_status': 'abc', 'refund_amount': 'abc'})
+        bad_refund_serializer = RefundSerializer(data = bad_refund_data)
 
-    def setProducts(self) -> None:
-        """Populates temporary test product catalog instances."""
-        self.p1 = Product.objects.create(
-            name="Tomato",
-            category=Product.ProductCategory.VEGETABLE,
-            discription="A juicy, red fruit often treated as a vegetable...",
-            price=20,
-            stock=100,
-            product_Img="images/products/tomato.jpg"
-        )
-        self.p2 = Product.objects.create(
-            name="Potato",
-            category=Product.ProductCategory.VEGETABLE,
-            discription="A starchy tuber native to South America...",
-            price=30,
-            stock=200,
-            product_Img="images/products/potato.jpg"
-        )
-        self.p3 = Product.objects.create(
-            name="Apple",
-            category=Product.ProductCategory.FRUIT,
-            discription="A crisp, sweet fruit from the rose family...",
-            price=100,
-            stock=50,
-            product_Img="images/products/Apple.png"
-        )
-        self.p4 = Product.objects.create(
-            name="Banana",
-            category=Product.ProductCategory.FRUIT,
-            discription="A long, curved tropical fruit...",
-            price=60,
-            stock=120,
-            product_Img="images/products/Banana.png"
-        )
-
-    def setCart(self) -> None:
-        """Sets up mock active shopping sessions items."""
-        self.c3 = Cart.objects.create(profile=self.profile, product=self.p3, quantity=5)
-
-        self.c1 = Cart.objects.create(profile=self.profile2, product=self.p1, quantity=2)
-        self.c2 = Cart.objects.create(profile=self.profile2, product=self.p2, quantity=5)
-        self.c4 = Cart.objects.create(profile=self.profile2, product=self.p4, quantity=1)
-
-    def setOrders(self) -> None:
-        """Saves base root orders calculated from cart prices."""
-        self.o1 = Orders.objects.create(
-            consumer=self.profile,
-            amount=Decimal(self.c3.total_price),
-            razorpay_order_id='orderid1',
-            payment_status="not_paid"
-        )
-
-        self.o2 = Orders.objects.create(
-            consumer=self.profile2,
-            amount=Decimal(self.c1.total_price + self.c2.total_price + self.c4.total_price),
-            razorpay_order_id='orderid2',
-            payment_status="not_paid"
-        )
-
-    def setOrderedItem(self) -> None:
-        """Binds structured line items matching historical orders."""
-        self.oi2 = OrderedItem.objects.create(order=self.o2, ordered_item=self.p1, quantity=2, total_price=self.c1.total_price, status="pending")
-        self.oi3 = OrderedItem.objects.create(order=self.o2, ordered_item=self.p2, quantity=5, total_price=self.c2.total_price, status="pending")
-        self.oi4 = OrderedItem.objects.create(order=self.o2, ordered_item=self.p4, quantity=1, total_price=self.c4.total_price, status="pending")
-
-    def test_serialization_post(self) -> None:
-        """Validates incoming client dictionary conversion to data rows."""
-        oi_post_data = {
-            'order': self.o1.uid,
-            'product_id': self.p3.uid,
-            'quantity': 5,
-            'total_price': self.c3.total_price,
-            'status': "pending"
-        }
-
-        serializer = OrderedItemSerializer(data=oi_post_data)
-        
-        print("\n--- [TEST] Executing Deserialization (POST payload validation) ---")
-        serializer.is_valid(raise_exception=True)
-        print("Validated Data Schema Output:", serializer.validated_data)
-        
-        order_item = serializer.save()
-        print("Saved Model Instance Object:", order_item)
-        print("Serialized Output Payload:\n", json.dumps(serializer.data, indent=2, sort_keys=False, cls=DjangoJSONEncoder))
-
-    def test_serialization_get(self) -> None:
-        """Validates outgoing raw data parsing for model collections."""
-        orders = Orders.objects.all()
-        serializer_orders = OrderSerializer(orders, many=True)
-        
-        print("\n--- [TEST] Executing Serializer Output (GET Collections) ---")
-        print("All High-Level Orders Array Payload:\n", json.dumps(serializer_orders.data, indent=2, sort_keys=False, cls=DjangoJSONEncoder))
-        print("-" * 50)
-
-        ordered_items = OrderedItem.objects.filter(order=self.o1)
-        serializer_items = OrderedItemSerializer(ordered_items, many=True)
-        print("Detailed Single Order Nested Items Payload:\n", json.dumps(serializer_items.data, indent=2, sort_keys=False, cls=DjangoJSONEncoder))
-        print("-" * 50)
+        self.assertTrue(refund_serializer.is_valid())
+        self.assertFalse(refund_serializer.errors)
+        self.assertFalse(bad_refund_serializer.is_valid())
+        self.assertTrue(bad_refund_serializer.errors)

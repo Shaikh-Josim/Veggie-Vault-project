@@ -12,7 +12,6 @@ from app_products.models import Product , Cart
 class Orders(BaseModel):
     consumer = models.ForeignKey(Profile, verbose_name= 'Consumer', on_delete=models.CASCADE, related_name="purchasedby")
     amount = models.DecimalField(max_digits=10, decimal_places=2, default= Decimal("0.00"))
-
     razorpay_order_id = models.CharField(max_length=255, unique=True, blank=True, null= True)
 
     order_status = models.CharField(
@@ -33,7 +32,10 @@ class Orders(BaseModel):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Order obj: (consumer-name:{self.consumer.fname} {self.consumer.lname}, order-amount:{self.amount} razorpay_orderid:{self.razorpay_order_id} order_status: {self.order_status})"
+        return f"consumer-name:{self.consumer.fname} {self.consumer.lname}, order-amount:{self.amount} razorpay_orderid:{self.razorpay_order_id}"
+
+    def debug_str(self) -> str:
+        return f"Order obj: (order-amount:{self.amount} razorpay_orderid:{self.razorpay_order_id}, order-status: {self.order_status}. payment-mode: {self.payment_mode}\n| consumer: Profile obj| {self.consumer} )"
         
     
 class OrderedItem(BaseModel):
@@ -49,14 +51,17 @@ class OrderedItem(BaseModel):
     )
 
     def __str__(self):
-        return f"order:{self.order} product:{self.ordered_item}, item_ status:{self.item_status}"
+        return f"order:{self.order} product:{self.ordered_item}, item_status:{self.item_status}"
+
+    def debug_str(self) -> str:
+        return f"OrderItem obj: (quantity:{self.quantity} total-price:{self.total_price}, item-status: {self.item_status}\n| consumer: Order obj| {self.order}\n order-item: Product obj| {self.ordered_item})"
 
 
 
 class Payment(BaseModel):
     order = models.ForeignKey(Orders, on_delete=models.CASCADE, related_name='payments')
     
-    razorpay_payment_id = models.CharField(max_length=100, unique=True)
+    razorpay_payment_id = models.CharField(max_length=100, unique=True, null = True, blank = True)
     razorpay_signature = models.CharField(max_length=200, blank=True, null=True)
     
     class Status(models.TextChoices):
@@ -73,7 +78,10 @@ class Payment(BaseModel):
     )
 
     def __str__(self):
-        return f"Payment {self.razorpay_payment_id} - {self.payment_status}"
+        return f"payment-id:{self.razorpay_payment_id} payment-status {self.payment_status}"
+
+    def debug_str(self) -> str:
+        return f"Payment obj: (razorpay-payment-id:{self.razorpay_payment_id} razorpay-signature:{self.razorpay_signature}, payment-status: {self.payment_status}\n| order: Order obj| {self.order})"
 
 class Refund(BaseModel):
     payment = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name='refunds')
@@ -94,7 +102,10 @@ class Refund(BaseModel):
     )
 
     def __str__(self):
-        return f"Refund obj:  |payment obj: {self.payment}| refund id: {self.razorpay_refund_id}, refund amount: {self.refund_amount}, refund_status: {self.refund_status}"
+        return f"refund id: {self.razorpay_refund_id}, refund amount: {self.refund_amount}, refund_status: {self.refund_status}"
+
+    def debug_str(self) -> str:
+            return f"Refund obj: (razorpay-refund-id: {self.razorpay_refund_id} refund-amount:{self.refund_amount}, refund-status: {self.refund_status}\n| payment: Payment obj| {self.payment})"
     
     def save(self, *args, **kwargs):
         if self.razorpay_refund_id == "":

@@ -17,22 +17,15 @@ staticfiles/
 
 # IDEs & Editors
 .vscode/
+veggie-vault.code-workspace
 
 # Environment & secrets
 .env
 
 # Others
-testing_data/
 Django-React-Full-Stack-App/
 frontend/
-stop
 upcoming features/
-veggie-vault.code-workspace
 Backend/api
-zp1.py
-check the code.py
-check.py
-make change.txt
 dump.rdb
-try_programs
-Extension
+try_programs/

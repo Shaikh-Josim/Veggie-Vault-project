@@ -89,14 +89,11 @@ class PaymentSerializer(serializers.ModelSerializer):
 class RefundSerializer(serializers.ModelSerializer):
     """
     """
-    payment_id = serializers.PrimaryKeyRelatedField(
-        queryset=Product.objects.all(),
-        source='ordered_item'
-    )
+    payment_id = serializers.UUIDField(source="payment.uid", read_only=True)
 
     class Meta:
         model = Refund
         fields = ["payment_id", "payment", "razorpay_refund_id", "refund_amount", "refund_status"]
         extra_kwargs = {              
-            'payment_id': {'write_only': True, 'many': True},
+            'payment_id': {'read_only': True, 'many': True},
         }

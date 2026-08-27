@@ -12,7 +12,7 @@ class ProductNestedSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     class Meta:
         model = Product
-        fields = ["name", "discription", "category", "price", "stock", "status", "product_Img"]
+        fields = ["name", "description", "category", "price", "stock", "status", "product_Img"]
         
     def get_category(self, obj):
         return {
@@ -31,9 +31,9 @@ class ProductSerializer(serializers.Serializer):
 class CartSerializer(serializers.ModelSerializer):
     cart_id = serializers.SerializerMethodField()
     total_price = serializers.SerializerMethodField()
-    profile_id = serializers.PrimaryKeyRelatedField(queryset=Profile.objects.all())
+    profile_id = serializers.PrimaryKeyRelatedField( source = 'profile',queryset=Profile.objects.all())
     product = ProductNestedSerializer(read_only = True)
-    product_id = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    product_id = serializers.PrimaryKeyRelatedField(source = 'product', queryset=Product.objects.all())
 
     class Meta:
         model = Cart
@@ -45,8 +45,4 @@ class CartSerializer(serializers.ModelSerializer):
     def get_total_price(self, obj: Cart) -> Decimal | None:
         return obj.total_price if obj else None
     
-    def create(self, validated_data):
-        profile = validated_data.pop('profile_id')
-        product = validated_data.pop('product_id')
-        cart, created = Cart.objects.update_or_create(profile = profile, product =  product , defaults=validated_data)
-        return cart
+

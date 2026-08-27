@@ -6,7 +6,7 @@
             "format": "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s"
         },
         "simple": {
-            "format": "[Level:%(levelname)s |Logger-Name:%(name)s |Module:%(module)s |Line_no:%(lineno)d] \ndatetime:%(asctime)s.ms:%(msecs)d: \nMSG:%(message)s\n\n",
+            "format": "[Level:%(levelname)s |Logger-Name:%(name)s |Module:%(module)s |Line_no:%(lineno)d] [datetime:%(asctime)s.ms:%(msecs)d]: \nMSG:%(message)s\n",
             "datefmt": "Date: %Y-%m-%d Time:%H:%M:%S%z"
         },
         "json": {
@@ -54,6 +54,11 @@
             "level": "ERROR", 
             "propagate": true
             }, 
+        "root": { 
+            "handlers": ["queue_handler"], 
+            "level": "WARNING", 
+            "propagate": false
+            },
         "app_users": { 
             "handlers": ["queue_handler"], 
             "level": "WARNING", 
@@ -73,6 +78,12 @@
             "handlers": ["queue_handler"], 
             "level": "WARNING", 
             "propagate": false
+            },
+        "base": { 
+            "handlers": ["queue_handler"], 
+            "level": "WARNING", 
+            "propagate": false
             }
+
     }
 }

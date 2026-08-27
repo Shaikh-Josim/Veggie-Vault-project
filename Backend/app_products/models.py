@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.validators import RegexValidator, MinValueValidator
 from django.utils.text import slugify
+from django.db.models.functions import TruncDate
 
 from base.models import BaseModel
 
@@ -26,7 +27,7 @@ class Product(BaseModel):
         max_length=60, unique=True, blank=True)
     category = models.IntegerField(
         verbose_name='Product Category', choices=ProductCategory.choices,default=ProductCategory.VEGETABLE)
-    discription = models.TextField(
+    description = models.TextField(
         verbose_name='Product Description', max_length=500, validators=[string_validator])
     price = models.DecimalField(
         verbose_name='Product Price', null= False, max_digits=10,decimal_places=2, validators=[MinValueValidator(0)])
@@ -37,20 +38,25 @@ class Product(BaseModel):
     product_Img = models.ImageField(
         verbose_name="Product Image", upload_to='images/products/', null=False, default="images/products/vv.jpg")
 
-    def save(self, *args, **kwargs):
+    def sulgify_product_name(self):
         if not self.slug:
             base_slug = slugify(self.name)
             slug = base_slug
             counter = 1
-            # Ensure uniqueness
             while Product.objects.filter(slug=slug).exists():
                 slug = f"{base_slug}-{counter}"
                 counter += 1
             self.slug = slug
+
+    def save(self, *args, **kwargs):
+        self.sulgify_product_name()
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name}"
+ 
+    def debug_str(self) -> str:
+        return f"Product obj | name: {self.name}, slug: {self.slug}, category: {self.category}, category-name: {self.get_category_display()}, description: {self.description}, price: {self.price}, stock: {self.stock}, status: {self.status}, status-name: {self.get_status_display()}, product-img: {self.product_Img}" #type:ignore
     
 class Cart(BaseModel):
     profile = models.ForeignKey(
@@ -60,7 +66,15 @@ class Cart(BaseModel):
     quantity = models.PositiveIntegerField(default=1)
 
     class Meta:
-        unique_together = ('profile' , 'product')
+        unique_together = ('profile' , 'product', 'created_at')
+        constraints = [
+            models.UniqueConstraint(
+                TruncDate("created_at"),
+                "profile",
+                'product',
+                name="unique_user_per_day",
+            )
+        ]
 
     @property 
     def total_price(self): 
@@ -72,3 +86,6 @@ class Cart(BaseModel):
     
     def __str__(self) -> str:
         return f"user-email: {self.profile.user.email} product: {self.product.name}"
+
+    def debug_str(self) -> str:
+        return f"Cart obj|\n Profile obj| {self.profile}\n Product obj| {self.product}\n quantity: {self.quantity}, total-price: {self.total_price}, is-stock {self.is_stock}"
