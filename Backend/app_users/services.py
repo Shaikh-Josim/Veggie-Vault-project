@@ -80,7 +80,7 @@ def handle_verification(email:str, v_code: str) -> Tuple[str, Optional[User]]:
             #core_services.send_email(subject='new_password', email= email, **{'v_code':vc})
             save_user_verification_code(email = email , vc = vc)
             logger.info("email sent sucsessfully")
-            send_email_task.delay(subject='new_password', email= email, v_code=vc) # type: ignore
+            send_email_task.delay(topic='new_password', email= email, v_code=vc) # type: ignore
             return "Verification code is sent to the email, check your email!", None
         else:
             user_obj = match_user_verification_code(email= email, v_code = v_code)
@@ -214,8 +214,6 @@ def check_email(email:str)-> User|None:
     except ValidationError:
         raise ValidationError("Invalid email format")
 
-
-
 def update_profile_location(profile: Profile, **location_data) -> Profile:
     """
     Service function to update a user's profile location by replacing an old location
@@ -274,7 +272,6 @@ def update_profile_location(profile: Profile, **location_data) -> Profile:
         logger.exception(str(e))
         raise UpdateError("Update Failed")
 
-
 def delete_profile_locations(profile: Profile, locations_data: list[Dict[str, Any]]) -> Profile:
     """
     Service function to remove one or more locations from a user's profile.
@@ -300,8 +297,7 @@ def delete_profile_locations(profile: Profile, locations_data: list[Dict[str, An
     """
     try:
         logger.info("Entering in user service")
-        locations_data if logger.info("Got locations data from request") else logger.info("locations data missing from request")
-        print(locations_data, "\t", type(locations_data))
+        logger.info("Got locations data from request") if locations_data else logger.info("locations data missing from request")
 
         with transaction.atomic():
             for location in locations_data:
@@ -360,3 +356,4 @@ def add_profile_location(profile: Profile, **location_data) -> Profile:
     except Exception as e:
         logger.exception(str(e))
         raise CreateError("Location addition Failed")
+ 

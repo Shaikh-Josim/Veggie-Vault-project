@@ -1,54 +1,132 @@
-from django.test import TestCase
+import logging
+import copy
+import shutil
+import tempfile
+
+from django.test import TestCase, override_settings
+from django.core.exceptions import ValidationError
+
 from app_users.models import User, Profile
 from app_locations.models import Location
 from app_products.models import Product, Cart
-from testing_data.fill_dummy_data import fill_database
+from base.tests.test_data import user1_data, location1_data, profile1_data, product1_data, get_test_img
+from base.helpers import pop_update_dict_data
 
-#run test using
-#python manage.py test app_users.tests.test_models
+logger = logging.getLogger("app_products")
 
-class UserModelTest(TestCase):
+# run test with
+# python .\manage.py test <app-name>.<test-folder>.<test-file-name>
+# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_products.tests.test_models.ProductModelTest --debug-mode
+class ProductModelTest(TestCase):
+    
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_products.tests.test_models.ProductModelTest.test_str_representation --debug-mode    
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
 
+        cls.test_media = tempfile.mkdtemp()
+        cls.media_override = override_settings(
+            MEDIA_ROOT=cls.test_media
+        )
+        cls.media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.media_override.disable()
+        shutil.rmtree(cls.test_media, ignore_errors=True)
+
+        super().tearDownClass()
+
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_products.tests.test_models.ProductModelTest.test_str_representation --debug-mode    
     def test_str_representation(self):
-        user = User.objects.create(email ="abc@example.com", password ='a1234')
-        print(user.email)
-        self.assertEqual(str(user), "user-email:abc@example.com")
+        logger.info("\n---------- STR REPRESENTATION PRODUCT MODEL TEST----------")
+        product_data = pop_update_dict_data(copy.deepcopy(product1_data), overrides={'product_Img': get_test_img(product1_data['name'])})
+        product = Product.objects.create(**product_data)
+        print(product.debug_str())
+        
+        self.assertEqual(str(product), "Tomato")
+        print(' TEST PASSED SUCCESSFULLY!!')        
 
-    def test_user_obj_values(self):
-        user = User.objects.create(email ="abc@example.com", password ='a1234')
-        print(user.email)
-        print(user.password)
-        print()
-        #self.assertEqual(str(user), "user-email:abc@example.com")
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_products.tests.test_models.ProductModelTest.test_product_obj_values --debug-mode    
+    def test_product_obj_values(self):
+        logger.info("\n---------- PRODUCT OBJ VALUES MODEL TEST----------")
+        product = Product.objects.create(**pop_update_dict_data(copy.deepcopy(product1_data), overrides={'product_Img': get_test_img(product1_data['name'])}))
 
-class ProfileModelTest(TestCase):
+        bad_product = pop_update_dict_data(copy.deepcopy(product1_data), overrides={'product_Img': get_test_img(product1_data['name']), 'name':1234})
+        bp = Product.objects.create(**bad_product)
+        
+        self.assertEqual(product.slug, "tomato")
+        self.assertEqual(product.price, 20)
+        self.assertEqual(product.stock, 100)
+        self.assertEqual(product.get_category_display(), 'Vegetable')#type:ignore
+        self.assertRaises(ValidationError, bp.full_clean)
+        print(' TEST PASSED SUCCESSFULLY!!')        
 
+# run test with
+# python .\manage.py test <app-name>.<test-folder>.<test-file-name>
+# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_products.tests.test_models.CartModelTest --debug-mode
+class CartModelTest(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
+        cls.test_media = tempfile.mkdtemp()
+        cls.media_override = override_settings(
+            MEDIA_ROOT=cls.test_media
+        )
+        cls.media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.media_override.disable()
+        shutil.rmtree(cls.test_media, ignore_errors=True)
+
+        super().tearDownClass()
+
+    # run this func test with 
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_products.tests.test_models.CartModelTest.test_str_representation --debug-mode    
     def test_str_representation(self):
-        user = User.objects.create(email ="abc@example.com", password ='a1234')
-        location = Location.objects.create(staddr = 'heien era', city = 'tokyo', state = 'nigga')
-        profile = Profile.objects.create(user = user, location = location)
-        print(str(profile))
-        print()
-        self.assertEqual(str(profile), "user name:  \n user-email: abc@example.com")
+        
 
-    def test_user_obj_values(self):
-        user = User.objects.create(email ="abc@example.com", password ='a1234')
-        location = Location.objects.create(staddr = 'heien era', city = 'tokyo', state = 'nigga')
-        print(str(location))
-        profile = Profile.objects.create(
-        user = user,
-        fname = 'thukuna',
-        lname = 'ryomen',
-        location = location,
-        #role = '1',
-        mobile_no = '1234567890')
-        p = Profile.objects.filter(mobile_no = 1234567890)
-        print(p.values())
-        print()
-        #self.assertEqual(str(user), "user-email:abc@example.com")
+        logger.info("\n---------- STR REPRESENTATION CART MODEL TEST ----------")
+        user = User.objects.create(**user1_data)
+        location = Location.objects.create(**location1_data)
+        profile = Profile.objects.create(user = user, **profile1_data)
+        profile.location.add(location)
+        product = Product.objects.create(**pop_update_dict_data(copy.deepcopy(product1_data), overrides={'product_Img': get_test_img(product1_data['name'])}))
+        cart = Cart.objects.create(profile= profile, product= product, quantity = 5)
 
-    def test_profile_validation(self):
-        user = User.objects.create(email ="abc@example.com", password ='a1234')
-        p = Profile.objects.create(user = user, mobile_no = 'abc')
-        p.full_clean()
+        print(str(cart))
+        print(cart.debug_str()) 
+
+        self.assertEqual(str(cart), "user-email: abc@example.com product: Tomato")
+        print(' TEST PASSED SUCCESSFULLY!!')        
+
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_products.tests.test_models.CartModelTest.test_cart_obj_values --debug-mode    
+    def test_cart_obj_values(self):
+        logger.info("\n---------- CART OBJ VALUES MODEL TEST----------")
+        
+        user = User.objects.create(**user1_data)
+        location = Location.objects.create(**location1_data)
+        profile = Profile.objects.create(user = user, **profile1_data)
+        profile.location.add(location)
+        product = Product.objects.create(**pop_update_dict_data(copy.deepcopy(product1_data), overrides={'product_Img': get_test_img(product1_data['name'])}))
+        cart = Cart.objects.create(profile= profile, product= product, quantity = 5)
+
+        
+        self.assertEqual(cart.quantity, 5)
+        self.assertEqual(cart.total_price, 100)
+        self.assertTrue(cart.is_stock)
+        self.assertIsNotNone(cart.product)
+        self.assertIsNotNone(cart.profile)
+        with self.assertRaises(ValueError):
+            Cart.objects.create(profile= profile, product= product, quantity = 'ADB')
+        print(' TEST PASSED SUCCESSFULLY!!')
+        
+
 

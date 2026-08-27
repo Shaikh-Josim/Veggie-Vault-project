@@ -18,6 +18,13 @@ class Location(BaseModel):
     landmark = models.CharField(verbose_name='Landmark', max_length=100, null = False, blank=True, default= '', validators=[address_validator])
     is_homeaddress = models.BooleanField(verbose_name='is home address', null=False, blank = True, default= False)
 
+    class Meta:
+        """constraints = [
+            models.UniqueConstraint(fields=["staddr", "city", "state", "hno", "landmark"], name="unique_full_location")
+        ]"""
 
     def __str__(self):
         return f"address:{self.staddr},{self.city},{self.state}"
+
+    def debug_str(self) -> str:
+        return f'Location obj| staddr: {self.staddr}, city: {self.city}, state: {self.state}, hno: {self.hno}, landmark: {self.landmark}, is_homeaddress {self.is_homeaddress}'

@@ -76,6 +76,7 @@ class OrderCreationService:
             
             if refund_obj:
                 refund = razorpay_client.payment.refund(razorpay_payment_id) #full refund
+
                 razorpay_refund_id = refund.get('id')
                 refund_amount = refund.get('amount')
                 refund_status = refund.get('status')
@@ -329,8 +330,8 @@ class OrderCreationService:
                 items = cast(OrderedItem, items)
                 # Format the data into fields matching the Cart model schema
                 products_data.append({
-                    "profile_id": str(items.order.consumer.uid),
-                    "product_id": str(items.ordered_item.uid), 
+                    "profile_id": items.order.consumer.uid,
+                    "product_id": items.ordered_item.uid, 
                     "quantity": items.quantity
                 })            
 
@@ -348,7 +349,7 @@ class OrderCreationService:
         
 
     @staticmethod
-    def reroll_stock(products: Iterable[Product], data_containing_quantity:Dict[str, str]):
+    def reroll_stock(products: Iterable[Product], data_containing_quantity:Dict[UUID, int]):
         """
         rerolls product's quantity from inventory stock.
         """
@@ -364,7 +365,7 @@ class OrderCreationService:
             with transaction.atomic():
                 for product in products:
                     logger.info(f"product stock before restocking :  {product.stock}")
-                    product.stock = F('stock') + data_containing_quantity.get(str(product.uid))
+                    product.stock = F('stock') + data_containing_quantity.get(product.uid)
                     product.save()
                     logger.info(f"product stock after restocking :  {product.stock}")
 
@@ -388,7 +389,7 @@ class OrderCreationService:
             with transaction.atomic():
 
                 # 1. filter objs which are 30 min olders ("representing orders were left and wasnt paid") and make order status as expired
-                order_obj = cast(Orders,Orders.objects.filter(razorpay_order_id = order_id, order_status = 'not_paid', payment_mode = 'online', created_at__lt = current_time - timedelta(minutes= 30)).first())
+                order_obj = cast(Orders, Orders.objects.filter(razorpay_order_id = order_id, order_status = 'not_paid', payment_mode = 'online', created_at__lt = current_time - timedelta(minutes= 30)).first())
                 print("order object: ", order_obj)
                 if not order_obj:
                     print("There is no order record for expiration..")
@@ -411,7 +412,7 @@ class OrderCreationService:
                 #   -> get products details using ordered items, 
                 #   -> lock and update stock value of products
                 extracted_products_data = OrderCreationService.get_products_from_ordereditem(ordered_items= ordered_items_objs)
-                products_data = cast(Dict[str, str], {product.get('product_id'):product.get('quantity') for product in extracted_products_data})
+                products_data = cast(Dict[UUID, int], {product.get('product_id'):product.get('quantity') for product in extracted_products_data})
                 products_id = list(products_data.keys())
 
                 locked_products = Product.objects.select_for_update().filter(uid__in = sorted(products_id))

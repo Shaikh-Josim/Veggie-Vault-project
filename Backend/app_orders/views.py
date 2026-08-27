@@ -26,11 +26,9 @@ logger = logging.getLogger('app_orders')  # will use your JSON config
 
 
 class GetOrderItemView(generics.ListAPIView):
-    queryset = Orders.objects.all()
+    queryset = OrderedItem.objects.all()
     serializer_class = OrderedItemSerializer
-    permission_classes = [permissions.AllowAny]
-
-logger = logging.getLogger('app_orders')
+    permission_classes = [permissions.IsAuthenticated]
     
 
 class CreateOrderView(generics.CreateAPIView):
@@ -67,7 +65,7 @@ class CreateOrderView(generics.CreateAPIView):
             payment_mode = order_serializer_data.get('payment_mode')
 
             amount, products_id = OrderCreationService.get_amount_from_cart(cart= self.get_cart())
-            logger.info(f"Validated order amount: INR {amount}") 
+            logger.info(f"Validated order amount: INR {amount}")  
             order_id = None # for offline (will become order id for online)
 
             if payment_mode == 'online':
@@ -118,7 +116,7 @@ class CreateOrderView(generics.CreateAPIView):
 
                         return Response(
                             {
-                                "msg": "order created successfully"
+                                "message": "order created successfully"
                             },
                             status=status.HTTP_201_CREATED
                         )
@@ -126,20 +124,21 @@ class CreateOrderView(generics.CreateAPIView):
                     # 5. If everything worked, send success response to frontend
                     merchant_key = RAZORPAY_TEST_API_KEY
                     logger.info(f"Checkout finished successfully for order: {order_id}")                    
-                    helpers.run_task_at(function = expire_stale_orders_task, minutes= 30, order_id = order_id)
+                    helpers.schedule_task(function = expire_stale_orders_task, minutes= 30, order_id = order_id)
                     
                     return Response(
                         {
-                            "order": razorpay_order, 
+                            "message": "order created successfully",
+                            "data": {"order": razorpay_order, 
                             "order_id": order_id, 
-                            "merchant_key": merchant_key
+                            "merchant_key": merchant_key}
                         },
                         status=status.HTTP_201_CREATED
                     )
                 # return response if stock unavailable
                 return Response(
                         {
-                            "msg": "stock unavailable "
+                            "message": "stock unavailable "
                         },
                         status=status.HTTP_400_BAD_REQUEST
                     )
@@ -199,20 +198,21 @@ class VerifyPaymentView(generics.CreateAPIView):
             razor_order_id_serializer.is_valid(raise_exception=True)
             razor_order_id_serializer_data = helpers.validated_dict(razor_order_id_serializer)
             order_id = razor_order_id_serializer_data.get("razorpay_order_id")
-            
+            server_razorpay_orderid =  Orders.objects.filter(razorpay_order_id = order_id).values_list("razorpay_order_id", flat=True).first()
+
             
             # 2. get and validate signature payload items from request
             payment_serializer = cast(PaymentSerializer, self.get_serializer(data=request.data))    
             payment_serializer.is_valid(raise_exception=True)
             payment_serializer_data = helpers.validated_dict(payment_serializer)
-            
             payment_id = payment_serializer_data.get("razorpay_payment_id")
             signature = payment_serializer_data.get("razorpay_signature")
             
             # 3. Security Check: Call Razorpay SDK utility to authenticate the digital signature
             logger.info("Verifying payload signature using Razorpay Client...")
+            print(server_razorpay_orderid, ' ', payment_id, ' ', signature)
             razorpay_client.utility.verify_payment_signature({
-                "razorpay_order_id": order_id,
+                "razorpay_order_id": server_razorpay_orderid,
                 "razorpay_payment_id": payment_id,
                 "razorpay_signature": signature
             })
@@ -226,6 +226,7 @@ class VerifyPaymentView(generics.CreateAPIView):
                 order_obj = cast(Orders, self.get_order_obj().select_for_update().get(razorpay_order_id=order_id))
 
                 payment_obj = Payment.objects.filter(razorpay_payment_id=payment_id).first()
+                
             # If the payment row already exists, update it instead of creating a duplicate
                 if payment_obj:
                     return Response({"msg": "order payment already done"}, status=status.HTTP_202_ACCEPTED)
@@ -241,14 +242,15 @@ class VerifyPaymentView(generics.CreateAPIView):
             # 5. Handle Action: Success Workflow
             if current_status == "captured":
 
-                #if order is not expired
+                #if order is expired
                 if order_obj.order_status == 'expired':
                     OrderCreationService.refund_expired_order_payment(razorpay_payment_id= payment_id)
-                    
+
+                #if order is not expired
                 elif order_obj.order_status == 'not_paid':
                     logger.info(f"Payment capture confirmed. Updating tracking rows to PAID for Order: {order_obj.uid}")
                     OrderCreationService.process_order_payment(order=order_obj, payment=payment, payment_status="captured")
-                    return Response({"msg": "order payment is done successfully"}, status=status.HTTP_202_ACCEPTED)
+                    return Response({"message": "order payment is done successfully"}, status=status.HTTP_202_ACCEPTED)
             
                 #if order expired
             
@@ -273,7 +275,7 @@ class VerifyPaymentView(generics.CreateAPIView):
                     ordered_items.delete()
                     logger.info("Items restored back to the user's active cart. OrderedItem entries cleaned up.")
 
-                return Response({"msg": "payment failed."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "payment failed."}, status=status.HTTP_400_BAD_REQUEST)
             
             # Edge case if status returns something unexpected like 'authorized' or 'refunded'
             else:
@@ -343,16 +345,6 @@ class RazorpayWebhookAPIView(views.APIView):
             payment_serializer_data = helpers.validated_dict(payment_serializer)
             payment_id = payment_serializer_data.get("razorpay_payment_id")
 
-
-            """
-            # webhook verification
-            razorpay_client.utility.verify_webhook_signature(
-                request.body.decode(),
-                request.headers["X-Razorpay-Signature"],
-                RAZORPAY_WEBHOOK_SECRET,
-            )
-            """
-
             print('body: ', body)
             res = razorpay_client.utility.verify_webhook_signature(
                 body.decode(),
@@ -384,12 +376,12 @@ class RazorpayWebhookAPIView(views.APIView):
 
                 if order.order_status == 'expired':
                     OrderCreationService.refund_expired_order_payment(razorpay_payment_id= payment_id)
-                    return Response({"msg": "Got payment for expired order, refund is initiated"}, status=status.HTTP_202_ACCEPTED)
+                    return Response({"message": "Got payment for expired order, refund is initiated"}, status=status.HTTP_202_ACCEPTED)
                     
                 elif order.order_status == 'not_paid':
                     logger.info(f"Payment capture confirmed. Updating tracking rows to PAID for Order: {order.uid}")
                     OrderCreationService.process_order_payment(order=order, payment=payment, payment_status="captured")
-                    return Response({"msg": "order payment is done successfully"}, status=status.HTTP_202_ACCEPTED)
+                    return Response({"message": "order payment is done successfully"}, status=status.HTTP_202_ACCEPTED)
                 else:
                     logger.error(f"Unexpected order status: {order.order_status}")
                     return Response(
@@ -417,12 +409,12 @@ class RazorpayWebhookAPIView(views.APIView):
                     ordered_items.delete()
                     logger.info("Items restored back to active carts. Failed ordered items tracking rows dropped.")
                     
-                return Response({"msg": "payment failed."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "payment failed."}, status=status.HTTP_400_BAD_REQUEST)
                 
             # If Razorpay sent an event type your view isn't tracking yet
             else:
                 logger.info(f"Webhook received unhandled event type: {event}. No database changes made.")
-                return Response({"msg": "Webhook event acknowledged"}, status=status.HTTP_200_OK)
+                return Response({"message": "Webhook event acknowledged"}, status=status.HTTP_200_OK)
 
         # Catch missing target database rows or lookups that failed entirely
         except (NotFound, Orders.DoesNotExist) as e:

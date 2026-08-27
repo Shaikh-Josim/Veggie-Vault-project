@@ -22,7 +22,7 @@ class ListProductView(generics.ListCreateAPIView):
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter] 
     filterset_fields = { 'category': ['exact'],
-                        'price': ['gte', 'lte']}
+                        'price': ['gte', 'lte', 'gt', 'lt']}
     search_fields = ['name', 'description'] 
 
 class RetrieveProductView(generics.RetrieveAPIView):
@@ -47,13 +47,11 @@ class ListCreateCartView(generics.ListCreateAPIView):
             cart_serializer.is_valid(raise_exception=True)
             cart_serializer_data = cast(Dict[str,Any], cart_serializer.validated_data)
             cart_serializer.save()
-            """profile_obj = Profile.objects.get(user = request.user)
-            instance = services.add_to_cart(profile= profile_obj, data= cart_serializer_data)"""
-
+            
             return Response(
                 {
                     "message": "Product added to cart successfully!",
-                    "cart": CartSerializer(Cart.objects.filter(profile__user = self.request.user), many=True).data
+                    "data": CartSerializer(Cart.objects.filter(profile__user = self.request.user), many=True).data
                 },
                     status=status.HTTP_201_CREATED
             )

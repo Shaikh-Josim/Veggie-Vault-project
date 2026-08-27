@@ -2,6 +2,8 @@
 from .models import Location
 from rest_framework import serializers
 
+
+
 class LocationSerializer(serializers.ModelSerializer):
     """
     Serializer for user authentication and account management.
