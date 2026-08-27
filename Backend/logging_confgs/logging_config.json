@@ -54,6 +54,11 @@
             "level": "ERROR", 
             "propagate": true
             }, 
+        "root": { 
+            "handlers": ["queue_handler"], 
+            "level": "WARNING", 
+            "propagate": false
+            },
         "app_users": { 
             "handlers": ["queue_handler"], 
             "level": "WARNING", 
@@ -73,6 +78,12 @@
             "handlers": ["queue_handler"], 
             "level": "WARNING", 
             "propagate": false
+            },
+        "base": { 
+            "handlers": ["queue_handler"], 
+            "level": "WARNING", 
+            "propagate": false
             }
+
     }
 }

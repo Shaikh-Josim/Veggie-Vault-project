@@ -2,11 +2,12 @@ from typing import Any, Dict, cast, Union
 from functools import wraps
 from django.utils import timezone
 from datetime import timedelta
-
+from celery import Task
 from django.core.cache import cache
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.serializers import Serializer, ListSerializer
+from base.exceptions import *
 
 def validated_dict(serializer: Union[Serializer, ListSerializer]) -> Dict[str, Any]:
     """
@@ -15,6 +16,15 @@ def validated_dict(serializer: Union[Serializer, ListSerializer]) -> Dict[str, A
     """
     serializer.is_valid(raise_exception=True)
     return cast(Dict[str, Any], serializer.validated_data)
+
+def pop_update_dict_data(data: dict, remove_keys:None|list = None, overrides:None|dict = None):
+    remove_keys = remove_keys or []
+    overrides = overrides or {}
+    return {
+        **{k: v for k, v in data.items() if k not in remove_keys},
+        **overrides
+    }
+
 
 
 
@@ -60,11 +70,12 @@ def require_idempotency_key(timeout=10):
         return wrapper
     return decorator
 
-def run_task_at(function, days=0, seconds=0, microseconds=0, milliseconds=0, minutes=10, hours=0, weeks=0, **kwargs):
-    print("Entering in run_task_at helper..")
-    if not days and not seconds and not microseconds and not milliseconds and not minutes and not hours and not hours:
-        print("need time to proceed")
+def schedule_task(function:Task, days=0, seconds=0, microseconds=0, milliseconds=0, minutes=0, hours=0, weeks=0, **kwargs):
+    print("Entering in schedule_task helper..")
+    if not any([days, seconds, microseconds, milliseconds, minutes, hours, weeks]):
+        raise NotFound("time need to be specified for scheduling task")
+
     run_time = timezone.now() + timedelta(days, seconds, microseconds, milliseconds, minutes, hours, weeks)
     
     function.apply_async(eta=run_time, kwargs = kwargs)
-    print("leaving from run_task_at helper..")
+    print("leaving from schedule_task helper..")

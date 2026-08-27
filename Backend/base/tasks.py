@@ -14,13 +14,13 @@ from base import services as core_services
 #run task with
 #celery -A VeggieVault worker -l info --pool=solo
 # celery -A VeggieVault worker -l info --pool=gevent
-#celery -A proj beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+#celery -A VeggieVault beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
 
 @shared_task(bind=True, retry_kwargs={"max_retries": 3})
-def send_email_task(self:Task, subject: str, email: str, v_code: str):
+def send_email_task(self:Task, topic: str, email: str, v_code: str):
     """Sends an email when the feedback form has been submitted."""
     try:
-        core_services.send_email(subject=subject, email=email, v_code=v_code)
+        core_services.send_email(topic= topic, email=email, v_code=v_code)
         return f"Email sent successfully to {email}"
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)

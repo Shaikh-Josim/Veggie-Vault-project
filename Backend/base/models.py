@@ -11,5 +11,5 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
 
-    def __debug_str__(self) -> str:
+    def debug_str(self) -> str:
         return f'uid: {self.uid}, created_at: {self.created_at}, updated_at: {self.updated_at}'

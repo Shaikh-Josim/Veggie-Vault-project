@@ -78,9 +78,10 @@ class Profile(BaseModel):
         verbose_name = "profile"
 
     class Role(models.IntegerChoices):
+        ADMIN = 1, "Admin"
         WORKER = 2, "Worker"
         CONSUMER = 3, "Consumer"
-        ADMIN = 1, "Admin"
+
 
     user = models.OneToOneField(User,verbose_name='user', on_delete=models.CASCADE, related_name= 'profile', related_query_name= 'user_profile')
 
@@ -97,7 +98,7 @@ class Profile(BaseModel):
     def __str__(self) -> str:
         return f"user name: {self.fname} {self.lname}\n user-email: {self.user.email}"
 
-    def __debug_str__(self) -> str:
+    def debug_str(self) -> str:
         return f"Profile obj | firstname: {self.fname}, lastname: {self.lname}, role: {self.role} role-name: {self.get_role_display()}, mobile no: {self.mobile_no}, user-img: {self.user_Img},\n User obj| user: {self.user}\n Location obj| location: {list(self.location.all()[:3])}\n Cart obj| cart {list(self.cart.all()[:3])}" #type: ignore[attr-defined]
 
 
@@ -115,5 +116,5 @@ class EmailVerificationCode(BaseModel):
     def __str__(self) -> str:
         return f"email code: {self.code}, expires at {self.expires_at}"
 
-    def __debug_str__(self) -> str:
+    def debug_str(self) -> str:
         return f"Email obj| email code: {self.code}, expires at {self.expires_at}, is_used {self.is_used}\n User obj| {self.user}"

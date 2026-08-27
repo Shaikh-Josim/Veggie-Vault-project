@@ -21,7 +21,7 @@ def set_status_outofstock(modeladmin, request, queryset):
     queryset.update(status=2)
 
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("name", "category", "discription", "price", "stock", "status", "product_Img", "preview_img")
+    list_display = ("name", "category", "description", "price", "stock", "status", "product_Img", "preview_img")
     search_fields = ("name", "price")
     list_filter = ("category", "stock", "status")
     actions = [set_vegetable_category, set_fruit_category, set_status_instock, set_status_outofstock]

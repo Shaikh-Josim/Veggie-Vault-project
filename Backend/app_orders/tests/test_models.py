@@ -1,105 +1,165 @@
-
+import logging
+import copy
 from decimal import Decimal
 
 from django.test import TestCase
+from django.core.exceptions import ValidationError
 
-from app_orders.models import OrderedItem, Product, Profile, Orders
+from app_orders.models import OrderedItem, Product, Profile, Orders, Payment, Refund
 from app_locations.models import Location
 from app_users.models import User
 from app_products.models import Cart
+from base.helpers import pop_update_dict_data
+from base.tests.test_data import user1_data, profile1_data, location1_data, product1_data, order1_data, ordereditem1_data, payment1_data, refund1_data
 
-# Run this specific test suite with:
+logger = logging.getLogger("app_orders")
 
+# run test with
+# python .\manage.py test <app-name>.<test-folder>.<test-file-name>
 # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.OrderModelTest --debug-mode
+
 class OrderModelTest(TestCase):
-    """
-    Test suite to validate serialization and deserialization patterns 
-    for Orders and OrderedItem schemas.
-    """
     
+
     def setUp(self) -> None:
         """Initializes testing records across required database tables."""
-        self.setUser()
-        self.setProducts()
-        self.setCart()
-
-    def setUser(self) -> None:
-        """Generates mock User, Location, and User Profile data."""
-        user = User.objects.create(email="john@domain.com", password="john1234")
-        user.save()
-        user2 = User.objects.create(email="brian@domain.com", password="brian1234")
-        user2.save()
+        self.user = User.objects.create(**user1_data)
+        self.location = Location.objects.create(**location1_data)
+        self.profile = Profile.objects.create(user = self.user, **profile1_data)
+        self.profile.location.add(self.location)
+        self.order = Orders.objects.create(consumer = self.profile, **order1_data)
         
-        location1 = Location(staddr="123 Baker Street", city="Springfield", state="California", hno="42", landmark="Near Central Park", is_homeaddress=True)
-        location2 = Location(staddr="12 main Street", city="Autumnfield", state="California", hno="2", landmark="Near Dolphin Park", is_homeaddress=False)
-        location1.save()
-        location2.save()
+    
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.OrderModelTest.test_str_representation --debug-mode    
+    def test_str_representation(self):
+        logger.info("\n---------- STR REPRESENTATION ORDER MODEL TEST----------")
         
-        self.profile = Profile(user=user, fname="John", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="9876543210", user_Img=None)
-        self.profile.save()
-        self.profile.location.add(location1, location2)
+        print(self.order.debug_str())
+        print(self.order)
+        self.assertEqual(str(self.order), "consumer-name:abc xyz, order-amount:500 razorpay_orderid:order_1")
+        print(' TEST PASSED SUCCESSFULLY!!')        
 
-        self.profile2 = Profile(user=user2, fname="Brian", lname="Doe", role=Profile.Role.CONSUMER, mobile_no="98576543210", user_Img=None)
-        self.profile2.save()
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.OrderModelTest.test_order_obj_values --debug-mode    
+    def test_order_obj_values(self):
+        logger.info("\n---------- Order OBJ VALUES MODEL TEST----------")
 
-    def setProducts(self) -> None:
-        """Populates temporary test product catalog instances."""
-        self.p1 = Product.objects.create(
-            name="Tomato",
-            category=Product.ProductCategory.VEGETABLE,
-            discription="A juicy, red fruit often treated as a vegetable...",
-            price=20,
-            stock=100,
-            product_Img="images/products/tomato.jpg"
-        )
-        self.p2 = Product.objects.create(
-            name="Potato",
-            category=Product.ProductCategory.VEGETABLE,
-            discription="A starchy tuber native to South America...",
-            price=30,
-            stock=200,
-            product_Img="images/products/potato.jpg"
-        )
-        self.p3 = Product.objects.create(
-            name="Apple",
-            category=Product.ProductCategory.FRUIT,
-            discription="A crisp, sweet fruit from the rose family...",
-            price=100,
-            stock=50,
-            product_Img="images/products/Apple.png"
-        )
-        self.p4 = Product.objects.create(
-            name="Banana",
-            category=Product.ProductCategory.FRUIT,
-            discription="A long, curved tropical fruit...",
-            price=60,
-            stock=120,
-            product_Img="images/products/Banana.png"
-        )
-
-    def setCart(self) -> None:
-        """Sets up mock active shopping sessions items."""
-        self.c3 = Cart.objects.create(profile=self.profile, product=self.p3, quantity=5)
-
-        self.c1 = Cart.objects.create(profile=self.profile2, product=self.p1, quantity=2)
-        self.c2 = Cart.objects.create(profile=self.profile2, product=self.p2, quantity=5)
-        self.c4 = Cart.objects.create(profile=self.profile2, product=self.p4, quantity=1)
-
-    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.OrderModelTest.test_order_creation --debug-mode
-    def test_order_creation(self) -> None:
-        """Binds structured line items matching historical orders."""
-        self.o1 = Orders.objects.create(
-            consumer=self.profile,
-            amount=Decimal(self.c3.total_price),
-            #razorpay_order_id= None,
-            payment_status="not_paid"
-        )
+        self.assertEqual(self.order.amount, 500)
+        self.assertEqual(self.order.razorpay_order_id, 'order_1')
+        self.assertEqual(self.order.order_status, 'paid')
+        self.assertEqual(self.order.payment_mode, 'offline')
         
-        self.o2 = Orders.objects.create(
-            consumer=self.profile2,
-            amount=Decimal(self.c1.total_price + self.c2.total_price + self.c4.total_price),
-            #razorpay_order_id= None,
-            payment_status="not_paid"
-        )
+        print(' TEST PASSED SUCCESSFULLY!!')        
+    
 
-        print(Orders.objects.all())
+# run test with
+# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.OrderedItemModelTest --debug-mode
+class OrderedItemModelTest(TestCase):
+
+    def setUp(self) -> None:
+        """Initializes testing records across required database tables."""
+        self.user = User.objects.create(**user1_data)
+        self.location = Location.objects.create(**location1_data)
+        self.profile = Profile.objects.create(user = self.user, **profile1_data)
+        self.profile.location.add(self.location)
+        self.product = Product.objects.create(**product1_data)
+        self.order = Orders.objects.create(consumer = self.profile, **order1_data)
+        self.ordered_item = OrderedItem.objects.create(order = self.order, ordered_item = self.product, **ordereditem1_data)
+        
+    
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.OrderedItemModelTest.test_str_representation --debug-mode    
+    def test_str_representation(self):
+        logger.info("\n---------- STR REPRESENTATION ORDERED ITEM MODEL TEST----------")
+        
+        print(self.ordered_item.debug_str())
+        print(self.ordered_item)
+        self.assertEqual(str(self.ordered_item), "order:consumer-name:abc xyz, order-amount:500 razorpay_orderid:order_1 product:Tomato, item_status:delivered")
+        print(' TEST PASSED SUCCESSFULLY!!')        
+
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.OrderedItemModelTest.test_order_obj_values --debug-mode    
+    def test_order_obj_values(self):
+        logger.info("\n---------- ORDERED ITEM OBJ VALUES MODEL TEST----------")
+
+        self.assertEqual(self.ordered_item.quantity, 25)
+        self.assertEqual(self.ordered_item.total_price, 500)
+        self.assertEqual(self.ordered_item.item_status, 'delivered')
+        
+        print(' TEST PASSED SUCCESSFULLY!!')        
+
+
+# run test with
+# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.PaymentModelTest --debug-mode
+class PaymentModelTest(TestCase):
+
+    def setUp(self) -> None:
+        """Initializes testing records across required database tables."""
+        self.user = User.objects.create(**user1_data)
+        self.location = Location.objects.create(**location1_data)
+        self.profile = Profile.objects.create(user = self.user, **profile1_data)
+        self.profile.location.add(self.location)
+        self.product = Product.objects.create(**product1_data)
+        self.order = Orders.objects.create(consumer = self.profile, **order1_data)
+        self.payment = Payment.objects.create(order = self.order, **payment1_data)
+        
+    
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.PaymentModelTest.test_str_representation --debug-mode    
+    def test_str_representation(self):
+        logger.info("\n---------- STR REPRESENTATION PAYMENT MODEL TEST----------")
+        
+        print(self.payment.debug_str())
+        print(self.payment)
+        self.assertEqual(str(self.payment), "payment-id:payment_1 payment-status captured")
+        print(' TEST PASSED SUCCESSFULLY!!')        
+
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.PaymentModelTest.test_order_obj_values --debug-mode    
+    def test_order_obj_values(self):
+        logger.info("\n---------- PAYMENT OBJ VALUES MODEL TEST----------")
+
+        self.assertEqual(self.payment.razorpay_payment_id, 'payment_1')
+        self.assertEqual(self.payment.payment_status, 'captured')
+        
+        print(' TEST PASSED SUCCESSFULLY!!')        
+
+
+# run test with
+# $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.RefundModelTest --debug-mode
+class RefundModelTest(TestCase):
+
+    def setUp(self) -> None:
+        """Initializes testing records across required database tables."""
+        self.user = User.objects.create(**user1_data)
+        self.location = Location.objects.create(**location1_data)
+        self.profile = Profile.objects.create(user = self.user, **profile1_data)
+        self.profile.location.add(self.location)
+        self.product = Product.objects.create(**product1_data)
+        self.order = Orders.objects.create(consumer = self.profile, **order1_data)
+        self.payment = Payment.objects.create(order = self.order, **payment1_data)
+        self.refund = Refund.objects.create(payment = self.payment, **refund1_data)
+        
+    
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.RefundModelTest.test_str_representation --debug-mode    
+    def test_str_representation(self):
+        logger.info("\n---------- STR REPRESENTATION REFUND MODEL TEST----------")
+        
+        print(self.refund.debug_str())
+        print(self.refund)
+        self.assertEqual(str(self.refund), "refund id: rfnd_1, refund amount: 500, refund_status: processed")
+        print(' TEST PASSED SUCCESSFULLY!!')        
+
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test app_orders.tests.test_models.RefundModelTest.test_order_obj_values --debug-mode    
+    def test_order_obj_values(self):
+        logger.info("\n---------- REFUND OBJ VALUES MODEL TEST----------")
+
+        self.assertEqual(self.refund.razorpay_refund_id, 'rfnd_1')
+        self.assertEqual(self.refund.refund_amount, '500')
+        self.assertEqual(self.refund.refund_status, 'processed')
+        
+        print(' TEST PASSED SUCCESSFULLY!!')        
+

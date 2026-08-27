@@ -23,7 +23,7 @@ class LogConfgsSetter:
             queue_handler.listener.start() # type: ignore
             atexit.register(queue_handler.listener.stop)# type: ignore
 
-        logger = logging.getLogger("app_users")
+        logger = logging.getLogger(__name__)
         logger.warning("Dev logging set")
 
     def set_test_logging_config(self):
@@ -52,5 +52,5 @@ class LogConfgsSetter:
 
         import logging
 
-        logger = logging.getLogger("app_users")
+        logger = logging.getLogger(__name__)
         logger.info("Test logging set")
