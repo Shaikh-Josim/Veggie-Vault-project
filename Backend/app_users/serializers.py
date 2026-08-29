@@ -1,16 +1,10 @@
-import re
-from rest_framework import serializers
-from django.contrib.auth.hashers import make_password
-from .models import User, Profile
-from app_locations.models import Location
-from app_locations.serializers import LocationSerializer
-from django.core.validators import RegexValidator
 from typing import cast
 
-password_validator = RegexValidator( 
-    regex = r'^[A-Za-z0-9@#$%&_]{8,}$',
-    message = "Password must be at least 8 characters long and contain only letters, numbers, or @#$%%&_"
-    )
+from rest_framework import serializers
+from app_users.models import User, Profile, Location
+from app_locations.serializers import LocationSerializer
+from app_users.validators import password_validator
+
 
 
 class EmailPasswordSerializer(serializers.Serializer):
@@ -29,9 +23,8 @@ class EmailPasswordSerializer(serializers.Serializer):
         ValidationError: If any of the fields fail validation (e.g., invalid email format or password rules).
     """
     email = serializers.EmailField()
-    password = serializers.CharField( write_only=True,
-    validators=[password_validator])
-    new_pass = serializers.CharField( write_only=True)
+    password = serializers.CharField( write_only=True, validators=[password_validator])
+    new_pass = serializers.CharField( write_only=True, validators=[password_validator])
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -60,8 +53,7 @@ class UserSerializer(serializers.ModelSerializer):
         ValidationError: If password validation fails.
     """
 
-    password = serializers.CharField( write_only=True,
-    validators=[password_validator])
+    password = serializers.CharField( write_only=True, validators=[password_validator])
     
     class Meta:
         model = User

@@ -1,15 +1,9 @@
 from django.db import models
-from django.core.validators import RegexValidator, MinValueValidator
+from django.core.validators import MinValueValidator
 from django.utils.text import slugify
-from django.db.models.functions import TruncDate
 
+from app_products.validators import product_name_validator, text_validator
 from base.models import BaseModel
-
-
-string_validator = RegexValidator(
-    regex = r"^[A-Za-z,.']+",
-    message = "only letters are valid"
-)
 
 # Create your models here.
 class Product(BaseModel):
@@ -22,13 +16,13 @@ class Product(BaseModel):
         OUTOFSTOCK = 2, "outofstock"
 
     name = models.CharField(
-        verbose_name='Product Name', max_length=30, null= False, validators=[string_validator])
+        verbose_name='Product Name', max_length=30, null= False, validators=[product_name_validator])
     slug = models.SlugField(
         max_length=60, unique=True, blank=True)
     category = models.IntegerField(
         verbose_name='Product Category', choices=ProductCategory.choices,default=ProductCategory.VEGETABLE)
     description = models.TextField(
-        verbose_name='Product Description', max_length=500, validators=[string_validator])
+        verbose_name='Product Description', max_length=500, validators=[text_validator])
     price = models.DecimalField(
         verbose_name='Product Price', null= False, max_digits=10,decimal_places=2, validators=[MinValueValidator(0)])
     stock = models.DecimalField(
@@ -66,13 +60,12 @@ class Cart(BaseModel):
     quantity = models.PositiveIntegerField(default=1)
 
     class Meta:
-        unique_together = ('profile' , 'product', 'created_at')
+        unique_together = ('profile' , 'product')
         constraints = [
             models.UniqueConstraint(
-                TruncDate("created_at"),
                 "profile",
                 'product',
-                name="unique_user_per_day",
+                name="unique_product_per_profile",
             )
         ]
 

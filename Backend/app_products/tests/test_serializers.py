@@ -78,13 +78,13 @@ class CartSerializerTest(TestCase):
         user = User.objects.create(**user1_data)
         profile = Profile.objects.create(user = user, **profile1_data)
         product = Product.objects.create(**pop_update_dict_data(copy.deepcopy(product1_data), overrides={'product_Img': get_test_img(product1_data['name'])}))
-        cart = Cart.objects.create(profile = profile, product = product, **cart1_data)
 
         cart_data = pop_update_dict_data(copy.deepcopy(cart1_data), overrides= {'profile_id': profile.uid, 'product_id':product.uid})
         cart_serializer = CartSerializer(data = cart_data)
         print("Serialization|  valid data: ",cart_serializer.is_valid(), "\n serialized data:", cart_serializer.validated_data)
         print(cart_serializer.errors)
 
+        cart = Cart.objects.create(profile = profile, product = product, **cart1_data)
         cart_deserializer = CartSerializer(cart)
         print("Deserialization| valid data: ", cart_deserializer.data )
 

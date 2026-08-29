@@ -4,21 +4,9 @@ from django.core.validators import RegexValidator
 
 from app_orders.models import Orders, OrderedItem, Product, Payment, Refund
 from app_products.serializers import ProductNestedSerializer
+from app_orders.validators import razorpay_orderid_validator
 
 logger = logging.getLogger('app_orders')
-
-# ==========================================
-# CUSTOM VALIDATORS
-# ==========================================
-
-razorpay_orderid_validator = RegexValidator( 
-    regex=r'^order_[A-Za-z0-9_]+$',
-    message="Invalid Razorpay Order ID format. Must start with 'order_' followed by alphanumeric characters."
-)
-
-# ==========================================
-# SERIALIZERS
-# ==========================================
 
 class OrderedItemSerializer(serializers.ModelSerializer):
     """

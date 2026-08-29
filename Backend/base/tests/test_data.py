@@ -2,7 +2,7 @@ from uuid import uuid4
 import json
 import copy 
 from typing import cast
-import hmac, hashlib
+import hmac, hashlib, secrets
 from config.settings.settings_test import RAZORPAY_TEST_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET
 
 from django.test import TestCase
@@ -27,6 +27,7 @@ def get_test_img(name):
         buffer.read(),
         content_type="image/jpeg"
     )
+
 
 def get_payment_signature(razorpay_order_id, razorpay_payment_id):
     secret = cast(str,RAZORPAY_TEST_KEY_SECRET)
@@ -86,10 +87,10 @@ ordereditem2_data = {'quantity': 20, 'total_price': 500, 'item_status':'pending'
 ordereditem3_data = {'quantity': 5,  'total_price': 500, 'item_status':'pending'}
 ordereditem4_data = {'quantity': 10, 'total_price': 500, 'item_status':'pending'}
 
-payment1_data = {'razorpay_payment_id': 'payment_1', 'razorpay_signature':'signature1', 'payment_status':'captured'}
-payment2_data = {'razorpay_payment_id': 'payment_2', 'razorpay_signature':'signature2', 'payment_status':'captured'}
-payment3_data = {'razorpay_payment_id': 'payment_3', 'razorpay_signature':'signature3', 'payment_status':'captured'}
-payment4_data = {'razorpay_payment_id': 'payment_4', 'razorpay_signature':'signature4', 'payment_status':'created'}
+payment1_data = {'razorpay_payment_id': 'pay_1', 'razorpay_signature':secrets.token_hex(32), 'payment_status':'captured'}
+payment2_data = {'razorpay_payment_id': 'pay_2', 'razorpay_signature':secrets.token_hex(32), 'payment_status':'captured'}
+payment3_data = {'razorpay_payment_id': 'pay_3', 'razorpay_signature':secrets.token_hex(32), 'payment_status':'captured'}
+payment4_data = {'razorpay_payment_id': 'pay_4', 'razorpay_signature':secrets.token_hex(32), 'payment_status':'created'}
 
 refund1_data = {'razorpay_refund_id': 'rfnd_1', 'refund_amount':'500', 'refund_status':'processed'}
 

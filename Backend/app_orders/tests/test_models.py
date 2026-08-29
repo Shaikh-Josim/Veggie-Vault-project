@@ -1,15 +1,9 @@
 import logging
-import copy
-from decimal import Decimal
-
 from django.test import TestCase
-from django.core.exceptions import ValidationError
 
 from app_orders.models import OrderedItem, Product, Profile, Orders, Payment, Refund
 from app_locations.models import Location
 from app_users.models import User
-from app_products.models import Cart
-from base.helpers import pop_update_dict_data
 from base.tests.test_data import user1_data, profile1_data, location1_data, product1_data, order1_data, ordereditem1_data, payment1_data, refund1_data
 
 logger = logging.getLogger("app_orders")
@@ -112,7 +106,7 @@ class PaymentModelTest(TestCase):
         
         print(self.payment.debug_str())
         print(self.payment)
-        self.assertEqual(str(self.payment), "payment-id:payment_1 payment-status captured")
+        self.assertEqual(str(self.payment), "payment-id:pay_1 payment-status captured")
         print(' TEST PASSED SUCCESSFULLY!!')        
 
     # run this func test with
@@ -120,7 +114,7 @@ class PaymentModelTest(TestCase):
     def test_order_obj_values(self):
         logger.info("\n---------- PAYMENT OBJ VALUES MODEL TEST----------")
 
-        self.assertEqual(self.payment.razorpay_payment_id, 'payment_1')
+        self.assertEqual(self.payment.razorpay_payment_id, 'pay_1')
         self.assertEqual(self.payment.payment_status, 'captured')
         
         print(' TEST PASSED SUCCESSFULLY!!')        

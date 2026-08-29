@@ -8,6 +8,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from base.models import BaseModel
 from app_locations.models import Location
 from app_products.models import Product
+from app_users.validators import name_validator, mobile_no_validator, email_validator, email_verification_code_validator
 
 
 # Create your models here.
@@ -25,22 +26,6 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         return self.create_user(email, password, **extra_fields)
-
-name_validator = RegexValidator(
-    regex = r'^[A-Za-z]+',
-    message = "only letters are valid")
-
-mobile_no_validator = RegexValidator(
-    regex = r'^[0-9]{10,}',
-    message = "only numbers are valid and only 10 digits are allowed")
-
-email_validator = RegexValidator(
-    regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$',
-    message = 'invalid email')
-
-email_verification_code_validator = RegexValidator(
-    regex = r'^[A-Za-z0-9]{6,}',
-    message = "only numbers and letters are valid")
 
 class User(BaseModel, AbstractBaseUser, PermissionsMixin):    
     class Meta:

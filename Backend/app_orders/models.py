@@ -6,13 +6,13 @@ from base.models import BaseModel
 from app_locations.models import Location
 from app_users.models import Profile
 from app_products.models import Product , Cart
-
+from app_orders.validators import razorpay_orderid_validator, razorpay_paymentid_validator, razorpay_signature_validator, razorpay_refundid_validator
 # Create your models here.
 
 class Orders(BaseModel):
     consumer = models.ForeignKey(Profile, verbose_name= 'Consumer', on_delete=models.CASCADE, related_name="purchasedby")
     amount = models.DecimalField(max_digits=10, decimal_places=2, default= Decimal("0.00"))
-    razorpay_order_id = models.CharField(max_length=255, unique=True, blank=True, null= True)
+    razorpay_order_id = models.CharField(max_length=255, unique=True, blank=True, null= True, validators=[razorpay_orderid_validator])
 
     order_status = models.CharField(
         max_length=20,
@@ -41,8 +41,8 @@ class Orders(BaseModel):
 class OrderedItem(BaseModel):
     order = models.ForeignKey(Orders, verbose_name= 'Order', on_delete= models.CASCADE, related_name='ordered_item')
     ordered_item = models.ForeignKey(Product, verbose_name='Ordered Product', on_delete=models.PROTECT, related_name="purchased_item")
-    quantity = models.IntegerField(verbose_name='Quantity', null= False)
-    total_price = models.IntegerField(verbose_name='total_price', null= False)
+    quantity = models.PositiveIntegerField(default=1, verbose_name='Quantity', null= False)
+    total_price = models.PositiveIntegerField(default=1, verbose_name='total_price', null= False)
 
     item_status = models.CharField(
         max_length=20,
@@ -61,8 +61,8 @@ class OrderedItem(BaseModel):
 class Payment(BaseModel):
     order = models.ForeignKey(Orders, on_delete=models.CASCADE, related_name='payments')
     
-    razorpay_payment_id = models.CharField(max_length=100, unique=True, null = True, blank = True)
-    razorpay_signature = models.CharField(max_length=200, blank=True, null=True)
+    razorpay_payment_id = models.CharField(max_length=100, unique=True, null = True, blank = True, validators=[razorpay_paymentid_validator])
+    razorpay_signature = models.CharField(max_length=200, blank=True, null=True, validators=[razorpay_signature_validator])
     
     class Status(models.TextChoices):
         CREATED = "created", "Created"
@@ -86,7 +86,7 @@ class Payment(BaseModel):
 class Refund(BaseModel):
     payment = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name='refunds')
     
-    razorpay_refund_id = models.CharField(max_length=100, unique=True, null= True, blank=True)
+    razorpay_refund_id = models.CharField(max_length=100, unique=True, null= True, blank=True, validators=[razorpay_refundid_validator])
     refund_amount = models.PositiveIntegerField(verbose_name='refunded_amount', blank = False, null= False, default= 0)
     
     class Status(models.TextChoices):
