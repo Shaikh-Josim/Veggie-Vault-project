@@ -3,6 +3,7 @@ import json
 import logging
 from logging.config import dictConfig
 import atexit
+from base.middleware import request_id
 
 class LogConfgsSetter:
     def __init__(self, cnfgs_path, log_store_path) -> None:
@@ -54,3 +55,9 @@ class LogConfgsSetter:
 
         logger = logging.getLogger(__name__)
         logger.info("Test logging set")
+
+
+class RequestIDFilter(logging.Filter):
+    def filter(self, record):
+        record.request_id = request_id.get()
+        return True

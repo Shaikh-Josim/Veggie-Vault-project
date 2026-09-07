@@ -52,6 +52,7 @@ class JSONFormatter(logging.Formatter):
                 record.created, tz=dt.timezone.utc
             ).strftime("Date:%Y-%m-%d Time:%H:%M:%S%z"),
             "ist_timestamp": dt.datetime.fromtimestamp(record.created, tz = IST).strftime("Date:%Y-%m-%d Time:%H:%M:%S%z"),
+            
         }
         if record.exc_info is not None:
             always_fields["exc_info"] = self.formatException(record.exc_info)
