@@ -8,6 +8,7 @@ from django.core.mail import send_mail
 #from django_celery_beat.models import PeriodicTask, IntervalSchedule, CrontabSchedule
 
 from base import services as core_services
+from base.log_reader import LogReader, LogFile
 
 
 
@@ -22,6 +23,16 @@ def send_email_task(self:Task, topic: str, email: str, v_code: str):
     try:
         core_services.send_email(topic= topic, email=email, v_code=v_code)
         return f"Email sent successfully to {email}"
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=60)
+
+
+@shared_task(bind=True, retry_kwargs={"max_retries": 3})
+def create_index_task(self:Task, log_file:LogFile, indexing_attributes: list[str]):
+    """Sends an email when the feedback form has been submitted."""
+    try:
+        LogReader().create_index_in_db(log_file, indexing_attributes)
+        return f"Index created on {indexing_attributes}"
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)
     

@@ -6,7 +6,7 @@ from celery.exceptions import Retry
 from django.test import TestCase
 
 from app_users.services import generate_verification_code
-from base.tasks import send_email_task
+from base.tasks import send_email_task, create_index_task
 
 logger = logging.getLogger('base')
 
@@ -32,3 +32,23 @@ class TasksTest(TestCase):
 
         mock_send_email.assert_called_once_with( topic="new_password", email= 'jhon@domain.com', v_code=self.vc)
         self.assertEqual(result.get(), "Email sent successfully to jhon@domain.com")
+
+        logger.info("TEST PASSED SUCCESSFULLY!!!")
+
+
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_celery_tasks.TasksTest.test_index_log_file_task --debug-mode
+    def test_index_log_file_task(self):
+        logger.info("\n----------CREATE INDEX CELERY TASK TEST----------")
+        log_file_path = "try_programs/django_errors.log.jsonl"
+        indexing_attributes = ["request_id", "user_id"]
+
+        with patch("base.tasks.LogReader.create_index_in_db") as mock_create_index:
+            result = cast(Any, create_index_task.delay)( log_file_path, indexing_attributes)
+
+        mock_create_index.assert_called_once_with( log_file_path, indexing_attributes)
+        self.assertEqual(result.get(), f"Index created on {indexing_attributes}")
+
+        logger.info("TEST PASSED SUCCESSFULLY!!!")
+
+
