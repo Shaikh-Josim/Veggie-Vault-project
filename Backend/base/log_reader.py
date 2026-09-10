@@ -1,4 +1,5 @@
 import time, timeit
+from uuid import UUID
 from typing import Iterable
 import json
 import os, sys
@@ -147,11 +148,11 @@ class LogReader:
 
         return logs    
 
-    def create_index_in_db(self, log_file:LogFile, indexing_attributes: list[str] = ['request_id']):
-        reader = LogReader()
+    def create_index_in_db(self, log_file_id:UUID, indexing_attributes: list[str] = ['request_id']):
+        log_file = LogFile.objects.get(uid = log_file_id)
         log_file_path = log_file.path
 
-        for log, start_position, length, _ in reader._read_json_logs(log_file_path):
+        for log, start_position, length, _ in self._read_json_logs(log_file_path):
 
             if not LogLocation.objects.filter(log_file = log_file, start_position = start_position, length = length).exists():
                 location = LogLocation.objects.create(log_file = log_file, start_position = start_position, length = length)

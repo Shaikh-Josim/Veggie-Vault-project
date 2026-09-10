@@ -12,6 +12,8 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": ":memory:",
+        #"NAME": BASE_DIR / "sqlite.sqlite3",
+
     }
 }
 
@@ -28,8 +30,8 @@ CACHES = {
 
 
 # Celery settings
-CELERY_TASK_ALWAYS_EAGER = "False"
-CELERY_TASK_EAGER_PROPAGATES = "True"
+CELERY_TASK_ALWAYS_EAGER = False
+CELERY_TASK_EAGER_PROPAGATES = True
 
 
 

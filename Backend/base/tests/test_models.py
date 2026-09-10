@@ -36,7 +36,7 @@ class LogModelTest(TestCase):
         
         self.log_file  = LogFile.objects.get(path = r"try_programs/django_errors.log.jsonl")
 
-        self.reader.create_index_in_db(log_file= self.log_file, indexing_attributes=['request_id', 'user_id'])
+        self.reader.create_index_in_db(log_file_id= self.log_file.uid, indexing_attributes=['request_id', 'user_id'])
 
         self.log_location = LogLocation.objects.get(start_position = indexes[0][0], length = indexes[0][1])
         self.log_index = LogIndex.objects.get(location = self.log_location, attribute_name = list(attr_name_val.keys())[0],attribute_value = list(attr_name_val.get(list(attr_name_val.keys())[0]).keys())[0]) #type:ignore
@@ -155,7 +155,7 @@ class LogModelTest(TestCase):
         logger.info("\n---------- CREATE INDEX IN DB DUPLICATE TEST ----------")
 
         self.reader.create_index_in_db(
-            log_file= self.log_file,
+            log_file_id= self.log_file.uid,
             indexing_attributes=["request_id", "user_id"],
         )
 
@@ -191,7 +191,7 @@ class LogModelTest(TestCase):
         )
 
         self.reader.create_index_in_db(
-            log_file= self.log_file,
+            log_file_id = self.log_file.uid,
             indexing_attributes=["user_id"],
         )
 

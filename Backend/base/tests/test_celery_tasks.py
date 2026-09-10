@@ -39,14 +39,24 @@ class TasksTest(TestCase):
     # run this func test with
     # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_celery_tasks.TasksTest.test_index_log_file_task --debug-mode
     def test_index_log_file_task(self):
+        from pathlib import Path
+        from base.log_reader import LogFile
+
+        log_dir = Path("try_programs")
+        files = list(log_dir.glob("*.jsonl"))
+        for file in files:
+            LogFile.objects.create(path = file.as_posix())
+        log_file  = LogFile.objects.get(path = r"try_programs/django_errors.log.jsonl")
+
+
         logger.info("\n----------CREATE INDEX CELERY TASK TEST----------")
-        log_file_path = "try_programs/django_errors.log.jsonl"
+        log_file_id = log_file.uid
         indexing_attributes = ["request_id", "user_id"]
 
         with patch("base.tasks.LogReader.create_index_in_db") as mock_create_index:
-            result = cast(Any, create_index_task.delay)( log_file_path, indexing_attributes)
+            result = cast(Any, create_index_task.delay)( log_file_id, indexing_attributes)
 
-        mock_create_index.assert_called_once_with( log_file_path, indexing_attributes)
+        mock_create_index.assert_called_once_with( log_file_id, indexing_attributes)
         self.assertEqual(result.get(), f"Index created on {indexing_attributes}")
 
         logger.info("TEST PASSED SUCCESSFULLY!!!")

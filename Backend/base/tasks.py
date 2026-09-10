@@ -1,6 +1,7 @@
 import logging
 from time import sleep, time
 from typing import cast, Any
+from uuid import UUID
 
 from celery import shared_task, Task
 from celery.signals import task_success, task_failure
@@ -28,10 +29,10 @@ def send_email_task(self:Task, topic: str, email: str, v_code: str):
 
 
 @shared_task(bind=True, retry_kwargs={"max_retries": 3})
-def create_index_task(self:Task, log_file:LogFile, indexing_attributes: list[str]):
+def create_index_task(self:Task, log_file_id:UUID, indexing_attributes: list[str]):
     """Sends an email when the feedback form has been submitted."""
     try:
-        LogReader().create_index_in_db(log_file, indexing_attributes)
+        LogReader().create_index_in_db(log_file_id, indexing_attributes)
         return f"Index created on {indexing_attributes}"
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)
