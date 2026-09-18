@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 
+from base.validators import logfile_fingerprint_validator
 # base/models.py
 
 class BaseModel(models.Model):
@@ -17,6 +18,9 @@ class BaseModel(models.Model):
 
 class LogFile(BaseModel):
     path = models.TextField(unique=True)
+    file_size = models.PositiveBigIntegerField(verbose_name= 'file size', default= 0)
+    file_modified_at = models.DateTimeField(null= True, blank= True)
+    file_fingerprint = models.CharField(max_length=64, blank=True, null=True, validators=[logfile_fingerprint_validator])
 
     def __str__(self) -> str:
         return f"logfile-path {self.path}"
