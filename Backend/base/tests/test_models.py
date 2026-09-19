@@ -407,83 +407,167 @@ class LogModelTest(TestCase):
 
     # run this func test with
     # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_models.LogModelTest.test_sync_log_file_smaller_replacement --debug-mode
+
+
     def test_sync_log_file_smaller_replacement(self):
-        logger.info(
-            "\n---------- SYNC LOG FILE SMALLER REPLACEMENT TEST ----------"
-        )
+        logger.info("\n---------- SYNC LOG FILE SMALLER REPLACEMENT TEST ----------")
 
         original_content = Path(self.log_file.path).read_bytes()
 
         try:
             # Initial indexing
-            self.reader.sync_log_file(
-                log_file_id=self.log_file.uid,
-                indexing_attributes=["request_id"],
-            )
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
 
-            self.assertEqual(
-                LogLocation.objects.filter(
-                    log_file=self.log_file
-                ).count(),
-                8,
-            )
+            self.assertEqual(LogLocation.objects.filter(log_file=self.log_file).count(), 8)
 
             # Remove the first log record
-            with open(
-                self.log_file.path,
-                "r",
-                encoding="utf-8",
-                newline="",
-            ) as file:
+            with open(self.log_file.path, "r", encoding="utf-8", newline="") as file:
                 content = file.read()
 
             first_record_end = content.index("\n") + 1
             updated_content = content[first_record_end:]
 
-            self.assertLess(
-                len(updated_content),
-                len(content),
-            )
+            self.assertLess(len(updated_content), len(content))
 
-            Path(self.log_file.path).write_text(
-                updated_content,
-                encoding="utf-8",
-                newline="",
-            )
+            Path(self.log_file.path).write_text(updated_content, encoding="utf-8", newline="")
 
             # Synchronize the modified file
-            self.reader.sync_log_file(
-                log_file_id=self.log_file.uid,
-                indexing_attributes=["request_id"],
-            )
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"],)
 
             # Verify 7 remaining locations
-            self.assertEqual(
-                LogLocation.objects.filter(
-                    log_file=self.log_file
-                ).count(),
-                7,
-            )
+            self.assertEqual(LogLocation.objects.filter(log_file=self.log_file).count(), 7)
 
             # Verify removed record is no longer indexed
-            self.assertEqual(
-                self.reader.search_log_using_db(
-                    {"request_id": "req-001"}
-                ).count(),
-                2,
-            )
+            self.assertEqual(self.reader.search_log_using_db({"request_id": "req-001"}).count(), 2)
 
             # Verify other records remain indexed
-            self.assertEqual(
-                self.reader.search_log_using_db(
-                    {"request_id": "req-002"}
-                ).count(),
-                2,
-            )
+            self.assertEqual(self.reader.search_log_using_db({"request_id": "req-002"}).count(), 2)
 
             print("TEST PASSED SUCCESSFULLY!!")
 
         finally:
-            Path(self.log_file.path).write_bytes(
-                original_content
+            Path(self.log_file.path).write_bytes(original_content)
+
+
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_models.LogModelTest.test_sync_log_file_empty --debug-mode
+    def test_sync_log_file_empty(self):
+        logger.info("\n---------- SYNC LOG FILE EMPTY TEST ----------")
+
+        original_content = Path(self.log_file.path).read_bytes()
+
+        try:
+            # Initial indexing
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            self.assertEqual(LogLocation.objects.filter(log_file=self.log_file).count(), 8)
+
+            # Empty the physical log file
+            Path(self.log_file.path).write_bytes(b"")
+
+            # Synchronize the empty file
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            # Verify all locations were deleted
+            self.assertEqual(LogLocation.objects.filter(log_file=self.log_file).count(), 0)
+
+            # Verify file metadata
+            self.log_file.refresh_from_db()
+
+            self.assertEqual(self.log_file.file_size, 0)
+
+            self.assertIsNone(self.log_file.file_fingerprint)
+
+            print("TEST PASSED SUCCESSFULLY!!")
+
+        finally:
+            Path(self.log_file.path).write_bytes(original_content)
+
+
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_models.LogModelTest.test_sync_log_file_whitespace_only --debug-mode
+
+
+    def test_sync_log_file_whitespace_only(self):
+        logger.info("\n---------- SYNC LOG FILE WHITESPACE ONLY TEST ----------")
+
+        original_content = Path(self.log_file.path).read_bytes()
+
+        try:
+            # Initial indexing
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            self.assertEqual(LogLocation.objects.filter(log_file=self.log_file).count(), 8)
+
+            # Replace the file content with whitespace
+            Path(self.log_file.path).write_text("\n\n   \n\t  \n", encoding="utf-8",)
+
+            # Synchronize the whitespace-only file
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            # Verify all locations were deleted
+            self.assertEqual(LogLocation.objects.filter(log_file=self.log_file).count(), 0)
+
+            # Verify physical file size is retained
+            self.log_file.refresh_from_db()
+
+            self.assertEqual(self.log_file.file_size, Path(self.log_file.path).stat().st_size)
+
+            self.assertIsNone(self.log_file.file_fingerprint,)
+
+            print("TEST PASSED SUCCESSFULLY!!")
+
+        finally:
+            Path(self.log_file.path).write_bytes(original_content)
+
+
+    # run this func test with
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_models.LogModelTest.test_sync_log_file_indexing_failure --debug-mode
+    def test_sync_log_file_indexing_failure(self):
+        logger.info("\n---------- SYNC LOG FILE INDEXING FAILURE TEST ----------")
+
+        original_content = Path(self.log_file.path).read_bytes()
+
+        try:
+            # Initial indexing
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"],)
+
+            self.log_file.refresh_from_db()
+
+            original_file_size = self.log_file.file_size
+            original_fingerprint = self.log_file.file_fingerprint
+            original_location_count = LogLocation.objects.filter(log_file=self.log_file).count()
+
+            # Append a valid record followed by malformed JSON
+            appended_content = (
+                '\n{"request_id":"req-006",'
+                '"user_id":"user-105",'
+                '"level":"INFO",'
+                '"message":"Valid record"}'
+                '\n{"request_id":'
             )
+
+            with open(self.log_file.path, "a", encoding="utf-8", newline="") as file:
+                file.write(appended_content)
+
+            # Indexing should fail
+            with self.assertRaises(ValueError):
+                self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"],)
+
+            # Metadata should remain unchanged
+            self.log_file.refresh_from_db()
+
+            self.assertEqual(self.log_file.file_size, original_file_size)
+
+            self.assertEqual(self.log_file.file_fingerprint, original_fingerprint)
+
+            # Existing locations should remain unchanged
+            self.assertEqual(LogLocation.objects.filter(log_file=self.log_file).count(), original_location_count)
+
+            # The partially indexed record should not exist
+            self.assertEqual(self.reader.search_log_using_db({"request_id": "req-006"}).count(), 0)
+
+            print("TEST PASSED SUCCESSFULLY!!")
+
+        finally:
+            Path(self.log_file.path).write_bytes(original_content)

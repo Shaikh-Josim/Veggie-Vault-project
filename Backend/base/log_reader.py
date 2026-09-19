@@ -160,19 +160,21 @@ class LogReader:
 
 
     def create_index_in_db(self, log_file_id:UUID, indexing_attributes: list[str] = ['request_id'], start_read_position: int = 0,):
-        log_file = LogFile.objects.get(uid = log_file_id)
-        log_file_path = log_file.path
 
-        for log, start_position, length, _ in self._read_json_logs(log_file_path, start_read_position= start_read_position):
+        with transaction.atomic():
+            log_file = LogFile.objects.get(uid = log_file_id)
+            log_file_path = log_file.path
 
-            if not LogLocation.objects.filter(log_file = log_file, start_position = start_position, length = length).exists():
-                location = LogLocation.objects.create(log_file = log_file, start_position = start_position, length = length)
-            else:
-                location = LogLocation.objects.get(log_file = log_file, start_position = start_position, length = length)
+            for log, start_position, length, _ in self._read_json_logs(log_file_path, start_read_position= start_read_position):
 
-            for attribute_name in indexing_attributes:
-                if attribute_name in log.keys() and not LogIndex.objects.filter(location = location, attribute_name = attribute_name, attribute_value = log.get(attribute_name)).exists():
-                    LogIndex.objects.create(location = location, attribute_name = attribute_name, attribute_value= log.get(attribute_name))
+                if not LogLocation.objects.filter(log_file = log_file, start_position = start_position, length = length).exists():
+                    location = LogLocation.objects.create(log_file = log_file, start_position = start_position, length = length)
+                else:
+                    location = LogLocation.objects.get(log_file = log_file, start_position = start_position, length = length)
+
+                for attribute_name in indexing_attributes:
+                    if attribute_name in log.keys() and not LogIndex.objects.filter(location = location, attribute_name = attribute_name, attribute_value = log.get(attribute_name)).exists():
+                        LogIndex.objects.create(location = location, attribute_name = attribute_name, attribute_value= log.get(attribute_name))
 
     def search_log_using_db(self, attr_name_val:dict):
         location = LogLocation.objects.all()
@@ -191,7 +193,30 @@ class LogReader:
         print("file-size", file_size, "file_modified_at", file_modified_at)
         print("log_file_file-size", log_file.file_size, "log_file_file_modified_at", log_file.file_modified_at, "finger-print", log_file.file_fingerprint)
 
+        with open(log_file.path, "rb") as file:
+            is_empty = not file.read().strip()
+
+        if is_empty:
+            self.delete_all_log_index(log_file_id=log_file_id)
+
+            log_file.file_size = file_size
+            log_file.file_modified_at = file_modified_at
+            log_file.file_fingerprint = None
+            log_file.save()
+
+            print("Log file is empty. No records to index.")
+            return
+
         if (log_file.file_size == file_size and log_file.file_modified_at == file_modified_at ):
+            return
+
+        elif (not file_size):
+            self.delete_all_log_index(log_file_id= log_file_id)
+            log_file.file_size = 0
+            log_file.file_fingerprint = None
+            log_file.file_modified_at = file_modified_at
+            log_file.save()
+            print('Log file is empty. No records to index.')
             return
 
         elif not log_file.file_size and not log_file.file_modified_at and not log_file.file_fingerprint:
@@ -238,6 +263,15 @@ class LogReader:
             log_file.locations.all().delete() #type:ignore
             print(len(log_file.locations.all())) #type:ignore
             self.create_index_in_db(log_file_id= log_file_id, indexing_attributes= indexing_attributes)
+
+    def delete_all_log_index(self, log_file_id: UUID):
+        log_file = LogFile.objects.get(uid=log_file_id)
+        with transaction.atomic():
+            print(len(log_file.locations.all())) #type:ignore
+            log_file.locations.all().delete() #type:ignore
+            print(len(log_file.locations.all())) #type:ignore
+            print("All indexes deleted successfully")
+            
 
 
         
