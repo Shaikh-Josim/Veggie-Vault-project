@@ -1,7 +1,9 @@
 import os
 from typing import cast, Dict
-from django.core.mail import send_mail
 import copy
+
+from django.core.mail import send_mail
+
 
 """email = EmailMessage(
 subject="Hello",

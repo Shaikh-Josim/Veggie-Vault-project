@@ -14,7 +14,7 @@ from pathlib import Path
 from datetime import timedelta
 import os
 
-from logging_confgs.log_cnfgs_setter import LogConfgsSetter
+from logging_confgs.log_settings import LogConfgsSetter
 
 from dotenv import load_dotenv 
 load_dotenv()
@@ -84,9 +84,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
     #local
-    "middleware.request_id.RequestIDMiddleware",
+    "base.middleware.RequestIDMiddleware",
     #3rd party
     "corsheaders.middleware.CorsMiddleware",
+
 ]
 
 ROOT_URLCONF = 'VeggieVault.urls'

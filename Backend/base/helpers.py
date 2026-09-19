@@ -1,12 +1,16 @@
 from typing import Any, Dict, cast, Union
 from functools import wraps
-from django.utils import timezone
 from datetime import timedelta
-from celery import Task
+import hashlib
+import os 
+
+from django.utils import timezone
 from django.core.cache import cache
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.serializers import Serializer, ListSerializer
+from celery import Task
+
 from base.exceptions import *
 
 def validated_dict(serializer: Union[Serializer, ListSerializer]) -> Dict[str, Any]:
@@ -79,3 +83,24 @@ def schedule_task(function:Task, days=0, seconds=0, microseconds=0, milliseconds
     
     function.apply_async(eta=run_time, kwargs = kwargs)
     print("leaving from schedule_task helper..")
+
+
+def get_file_prefix_fingerprint(log_file_path: str, size: int) -> str:
+    chunk_size = 640
+    hasher = hashlib.sha256()
+    total_file_size_byte = os.path.getsize(log_file_path)
+    total_bytes_read = 0 
+
+    with open(log_file_path, "rb") as file:
+        chunk_size = min(chunk_size, size)
+
+        while chunk := file.read(chunk_size): 
+            hasher.update(chunk)
+            total_bytes_read += len(chunk)
+            chunk_size = size - total_bytes_read
+            print('readed', total_bytes_read)
+            if total_bytes_read == size:
+                break
+
+    print("total file size", total_file_size_byte)
+    return hasher.hexdigest()
