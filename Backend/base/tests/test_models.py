@@ -611,3 +611,46 @@ class LogModelTest(TestCase):
         finally:
             # Restore the physical file
             log_file_path.write_bytes(original_content)
+
+    # Run with:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_models.LogModelTest.test_sync_log_file_missing_then_changed --debug-mode
+    def test_sync_log_file_missing_then_changed(self):
+        logger.info("\n--------- SYNC MISSING THEN CHANGED TEST ----------")
+
+        log_file_path = Path(self.log_file.path)
+        original_content = log_file_path.read_bytes()
+
+        try:
+            # Initial indexing
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            self.log_file.refresh_from_db()
+
+            original_location_count = LogLocation.objects.filter(log_file=self.log_file).count()
+
+            # Delete physical file
+            log_file_path.unlink()
+
+            # Recreate file with changed content
+            changed_content = original_content.replace(
+                b'"request_id":"req-001"',
+                b'"request_id":"req-009"',
+                1,
+            )
+
+            log_file_path.write_bytes(changed_content)
+
+            # Synchronize changed file
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            # Verify index was rebuilt
+            self.assertEqual(LogLocation.objects.filter(log_file=self.log_file).count(), original_location_count)
+
+            self.assertEqual(self.reader.search_log_using_db({"request_id": "req-001"}).count(), 2)
+
+            self.assertEqual(self.reader.search_log_using_db({"request_id": "req-009"}).count(), 1)
+
+            print("TEST PASSED SUCCESSFULLY!!")
+
+        finally:
+            log_file_path.write_bytes(original_content)    
