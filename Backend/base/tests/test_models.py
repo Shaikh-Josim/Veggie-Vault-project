@@ -1,5 +1,5 @@
 from pathlib import Path
-import logging
+import logging, os
 from typing import Iterable
 from unittest.mock import patch
 
@@ -654,3 +654,42 @@ class LogModelTest(TestCase):
 
         finally:
             log_file_path.write_bytes(original_content)    
+
+
+    # Run with:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_models.LogModelTest.test_sync_log_file_same_content_different_mtime --debug-mode
+    def test_sync_log_file_same_content_different_mtime(self):
+        logger.info("\n--------- SYNC SAME CONTENT DIFFERENT MTIME TEST ----------")
+
+        log_file_path = Path(self.log_file.path)
+        original_content = log_file_path.read_bytes()
+
+        try:
+            # Initial indexing
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            self.log_file.refresh_from_db()
+
+            original_fingerprint = self.log_file.file_fingerprint
+            original_location_count = LogLocation.objects.filter(log_file=self.log_file).count()
+
+            # Change modification time without changing content
+            current_mtime = log_file_path.stat().st_mtime
+            os.utime(log_file_path, (current_mtime, current_mtime + 100))
+
+            # Synchronize unchanged content
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            self.log_file.refresh_from_db()
+
+            # Verify content and index remain unchanged
+            self.assertEqual(self.log_file.file_fingerprint, original_fingerprint)
+
+            self.assertEqual(LogLocation.objects.filter(log_file=self.log_file).count(), original_location_count)
+
+            self.assertEqual(self.reader.search_log_using_db({"request_id": "req-001"}).count(), 3)
+
+            print("TEST PASSED SUCCESSFULLY!!")
+
+        finally:
+            log_file_path.write_bytes(original_content)
