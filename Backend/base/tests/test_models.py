@@ -571,3 +571,43 @@ class LogModelTest(TestCase):
 
         finally:
             Path(self.log_file.path).write_bytes(original_content)
+
+
+    # Run with:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_models.LogModelTest.test_sync_log_file_missing --debug-mode
+    def test_sync_log_file_missing(self):
+        logger.info("\n---------- SYNC LOG FILE MISSING TEST ----------")
+
+        log_file_path = Path(self.log_file.path)
+        original_content = log_file_path.read_bytes()
+
+        try:
+            # Initial indexing
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            self.log_file.refresh_from_db()
+
+            original_file_size = self.log_file.file_size
+            original_fingerprint = self.log_file.file_fingerprint
+            original_location_count = LogLocation.objects.filter(log_file=self.log_file).count()
+
+            # Delete the physical file
+            log_file_path.unlink()
+
+            # Expect missing file error
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            # Verify database record remains unchanged
+            self.log_file.refresh_from_db()
+
+            self.assertEqual(self.log_file.file_size, original_file_size)
+
+            self.assertEqual(self.log_file.file_fingerprint, original_fingerprint)
+
+            self.assertEqual(LogLocation.objects.filter(log_file=self.log_file).count(), original_location_count)
+
+            print("TEST PASSED SUCCESSFULLY!!")
+
+        finally:
+            # Restore the physical file
+            log_file_path.write_bytes(original_content)

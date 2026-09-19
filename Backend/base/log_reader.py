@@ -1,4 +1,5 @@
 import time, timeit
+import logging
 from uuid import UUID
 from typing import Iterable
 import json
@@ -14,6 +15,8 @@ from django.db import transaction
 from base.models import LogLocation, LogIndex, LogFile
 from base.helpers import get_file_prefix_fingerprint
 
+
+logger = logging.getLogger('base')
 
 class LogReader:
 
@@ -185,8 +188,13 @@ class LogReader:
 
     def sync_log_file(self, log_file_id: UUID, indexing_attributes: list[str]):
 
+        
         log_file = LogFile.objects.get(uid=log_file_id)
 
+        if not os.path.exists(log_file.path):
+            logger.warning("Log file does not exist: %s",log_file.path)
+            return
+        
         file_size = os.path.getsize(log_file.path)
         file_modified_at = timezone.datetime.fromtimestamp(os.path.getmtime(log_file.path),tz=timezone.get_current_timezone())
 
@@ -208,6 +216,7 @@ class LogReader:
             return
 
         if (log_file.file_size == file_size and log_file.file_modified_at == file_modified_at ):
+            print("No Change Detected")
             return
 
         elif (not file_size):
