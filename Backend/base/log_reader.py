@@ -201,8 +201,18 @@ class LogReader:
         print("file-size", file_size, "file_modified_at", file_modified_at)
         print("log_file_file-size", log_file.file_size, "log_file_file_modified_at", log_file.file_modified_at, "finger-print", log_file.file_fingerprint)
 
+        # Size and modification time are used as a fast change-detection check.
+        # Content changes with identical size and mtime are not detected.
+        if (log_file.file_size == file_size and log_file.file_modified_at == file_modified_at ):
+            logger.info("No change detected for log file: %s", log_file.path)
+            return
+
+        is_empty = True
         with open(log_file.path, "rb") as file:
-            is_empty = not file.read().strip()
+            while chunk := file.read(4096):
+                if chunk.strip():
+                    is_empty = False
+                    break
 
         if is_empty:
             self.delete_all_log_index(log_file_id=log_file_id)
@@ -215,18 +225,6 @@ class LogReader:
             print("Log file is empty. No records to index.")
             return
 
-        if (log_file.file_size == file_size and log_file.file_modified_at == file_modified_at ):
-            print("No Change Detected")
-            return
-
-        elif (not file_size):
-            self.delete_all_log_index(log_file_id= log_file_id)
-            log_file.file_size = 0
-            log_file.file_fingerprint = None
-            log_file.file_modified_at = file_modified_at
-            log_file.save()
-            print('Log file is empty. No records to index.')
-            return
 
         elif not log_file.file_size and not log_file.file_modified_at and not log_file.file_fingerprint:
             self.create_index_in_db(log_file_id= log_file_id, indexing_attributes= indexing_attributes)

@@ -1,7 +1,7 @@
 from pathlib import Path
-import logging, os
+import logging, os, hashlib
 from typing import Iterable
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from django.test import TestCase
 
@@ -693,3 +693,162 @@ class LogModelTest(TestCase):
 
         finally:
             log_file_path.write_bytes(original_content)
+
+
+    # Run this func test with:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_models.LogModelTest.test_sync_log_file_read_error --debug-mode
+    def test_sync_log_file_read_error(self):
+        logger.info("\n--------- SYNC READ ERROR TEST ----------")
+        original_file_size = self.log_file.file_size
+        original_fingerprint = self.log_file.file_fingerprint
+
+        with patch("builtins.open", side_effect=OSError("Simulated read error")):
+            with self.assertRaises(OSError):
+                self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+        self.log_file.refresh_from_db()
+        self.assertEqual(self.log_file.file_size, original_file_size)
+        self.assertEqual(self.log_file.file_fingerprint, original_fingerprint)
+
+        logger.info("SYNC READ ERROR TEST PASSED SUCCESSFULLY")
+
+
+    # Run this func test with:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_models.LogModelTest.test_sync_log_file_read_error_existing_metadata --debug-mode
+    def test_sync_log_file_read_error_existing_metadata(self):
+        logger.info("\n--------- SYNC READ ERROR EXISTING METADATA TEST ----------")
+
+        self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+        self.log_file.refresh_from_db()
+
+        original_file_size = self.log_file.file_size
+        original_fingerprint = self.log_file.file_fingerprint
+        original_index_count = LogIndex.objects.count()
+
+        file_path = Path(self.log_file.path)
+        original_content = file_path.read_bytes()
+
+        try:
+            with file_path.open("ab") as file:
+                file.write(b'{"request_id":"req-009","message":"New record"}')
+
+            with patch.object(self.reader, "_read_json_logs", side_effect=OSError("Simulated read error")):
+                with self.assertRaises(OSError):
+                    self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            self.log_file.refresh_from_db()
+
+            self.assertEqual(self.log_file.file_size, original_file_size)
+            self.assertEqual(self.log_file.file_fingerprint, original_fingerprint)
+            self.assertEqual(LogIndex.objects.count(), original_index_count)
+
+        finally:
+            file_path.write_bytes(original_content)
+
+        logger.info("SYNC READ ERROR EXISTING METADATA TEST PASSED SUCCESSFULLY")
+
+
+    # Run this func test:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_models.LogModelTest.test_sync_log_file_final_fingerprint_error --debug-mode
+    def test_sync_log_file_final_fingerprint_error(self):
+        logger.info("\n--------- SYNC FINAL FINGERPRINT ERROR TEST ----------")
+
+        self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+        self.log_file.refresh_from_db()
+
+        original_file_size = self.log_file.file_size
+        original_fingerprint = self.log_file.file_fingerprint
+        original_index_count = LogIndex.objects.count()
+
+        file_path = Path(self.log_file.path)
+        original_content = file_path.read_bytes()
+
+        original_sha256 = hashlib.sha256
+        call_count = 0
+
+        def sha256_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+
+            if call_count == 2:
+                hasher = MagicMock()
+                hasher.update.side_effect = OSError("Simulated fingerprint read error")
+                return hasher
+
+            return original_sha256(*args, **kwargs)
+
+        try:
+            with file_path.open("ab") as file:
+                file.write(b'{"request_id":"req-009","message":"New record"}')
+
+            with patch("base.helpers.hashlib.sha256", side_effect=sha256_side_effect):
+                with self.assertRaises(OSError):
+                    self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            self.log_file.refresh_from_db()
+
+            self.assertEqual(self.log_file.file_size, original_file_size)
+            self.assertEqual(self.log_file.file_fingerprint, original_fingerprint)
+            self.assertGreater(LogIndex.objects.count(), original_index_count)
+
+        finally:
+            file_path.write_bytes(original_content)
+
+        logger.info("SYNC FINAL FINGERPRINT ERROR TEST PASSED SUCCESSFULLY")
+
+
+    # Run this func test with:
+    # $env:PYTHONUNBUFFERED=1; python .\manage.py test base.tests.test_models.LogModelTest.test_sync_log_file_recovery_after_fingerprint_failure --debug-mode
+
+    def test_sync_log_file_recovery_after_fingerprint_failure(self):
+        logger.info("\n--------- SYNC FINGERPRINT FAILURE RECOVERY TEST ----------")
+
+        self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+        self.log_file.refresh_from_db()
+
+        file_path = Path(self.log_file.path)
+        original_content = file_path.read_bytes()
+
+        try:
+            original_file_size = self.log_file.file_size
+
+            with file_path.open("ab") as file:
+                file.write(b'{"request_id":"req-009","message":"New record"}')
+
+            updated_file_size = file_path.stat().st_size
+            original_sha256 = hashlib.sha256
+            call_count = 0
+
+            def sha256_side_effect(*args, **kwargs):
+                nonlocal call_count
+                call_count += 1
+
+                if call_count == 2:
+                    hasher = MagicMock()
+                    hasher.update.side_effect = OSError("Simulated fingerprint read error")
+                    return hasher
+
+                return original_sha256(*args, **kwargs)
+
+            with patch("base.helpers.hashlib.sha256", side_effect=sha256_side_effect):
+                with self.assertRaises(OSError):
+                    self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+
+            self.log_file.refresh_from_db()
+            index_count_after_failure = LogIndex.objects.count()
+
+            self.assertEqual(self.log_file.file_size, original_file_size)
+
+            self.reader.sync_log_file(log_file_id=self.log_file.uid, indexing_attributes=["request_id"])
+            self.log_file.refresh_from_db()
+
+            expected_fingerprint = hashlib.sha256(file_path.read_bytes()).hexdigest()
+
+            self.assertEqual(self.log_file.file_size, updated_file_size)
+            self.assertEqual(self.log_file.file_fingerprint, expected_fingerprint)
+            self.assertEqual(LogIndex.objects.count(), index_count_after_failure)
+
+        finally:
+            file_path.write_bytes(original_content)
+
+        logger.info("SYNC FINGERPRINT FAILURE RECOVERY TEST PASSED SUCCESSFULLY")
