@@ -59,7 +59,7 @@ class LogReader:
                         json_obj_indices.append([start_position, end]) if not [start_position, end] in json_obj_indices else json_obj_indices
                         pending_whitespaces = 0
 
-                        print(log, start_position, length)
+                        logger.debug(log, start_position, length)
 
                     except json.JSONDecodeError as e:
                         
@@ -80,8 +80,8 @@ class LogReader:
 
                     # Remove the JSON object we just processed.
                     buffer = buffer[end:]
-        print("file-size:", total_file_size_byte)
-        print("byte-read:", byte_read)
+        logger.debug("file-size: %s", total_file_size_byte)
+        logger.debug("byte-read: %s", byte_read)
 
         # if buffer has some data in it, but whole file has already been read..
         buffer = buffer.strip()
