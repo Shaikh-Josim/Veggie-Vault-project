@@ -412,6 +412,7 @@ class LogSearchCommandTest(TestCase):
 
         logs = [json.loads(line) for line in out.getvalue().splitlines() if line.startswith("{")]
 
+
         self.assertEqual([log["message"] for log in logs], ["User logged in", "Order created", "Profile updated", "Order shipped"])
 
         print("Result order Test Passed Successfully!!")

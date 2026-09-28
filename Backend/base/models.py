@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 
 from base.validators import logfile_fingerprint_validator
+
 # base/models.py
 
 class BaseModel(models.Model):
