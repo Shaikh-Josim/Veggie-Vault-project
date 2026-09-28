@@ -1,6 +1,8 @@
 from io import StringIO
 import os
-import logging, json
+import logging
+import json
+import tempfile
 
 from django.core.management import call_command, CommandError
 from django.test import TestCase
@@ -15,6 +17,36 @@ logger = logging.getLogger("base")
 
 class LogSearchCommandTest(TestCase):
 
+    #helper function
+    def create_test_log_file(self):
+        records = [
+            {"request_id": "req-001", "user_id": "user-101", "order_id": "ord-501", "level": "INFO", "message": "User logged in"},
+            {"request_id": "req-002", "user_id": "user-102", "order_id": "ord-502", "level": "ERROR", "message": "Payment failed"},
+            {"request_id": "req-001", "user_id": "user-101", "order_id": "ord-503", "level": "INFO", "message": "Order created"},
+            {"request_id": "req-003", "user_id": "user-103", "order_id": "ord-504", "level": "WARNING", "message": "Stock running low"},
+            {"request_id": "req-002", "user_id": "user-102", "order_id": "ord-505", "level": "INFO", "message": "Payment retried"},
+            {"request_id": "req-004", "user_id": "user-101", "level": "INFO", "message": "Profile updated"},
+            {"request_id": "req-005", "user_id": "user-104", "order_id": "ord-506", "level": "ERROR", "message": "Order cancelled"},
+            {"request_id": "req-001", "user_id": "user-101", "order_id": "ord-507", "level": "INFO", "message": "Order shipped"},
+        ]
+
+        file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
+        self.file_path = file.name
+
+        try:
+            for record in records:
+                file.write(json.dumps(record) + "\n")
+        finally:
+            file.close()
+
+        return self.file_path
+
+    def tearDown(self):
+        if hasattr(self, "file_path") and os.path.exists(self.file_path):
+            os.remove(self.file_path)
+        super().tearDown()
+
+    
     # Run this test function with:
     # python manage.py test base.tests.test_logsearch_command.LogSearchCommandTest.test_unregistered_file
     def test_unregistered_file(self):
@@ -42,7 +74,7 @@ class LogSearchCommandTest(TestCase):
     def test_registered_file(self):
         print("\n--------- REGISTERED FILE TEST ----------")
 
-        file_path = "try_programs/django_errors.log.jsonl"
+        file_path = self.create_test_log_file()
 
         LogFile.objects.create(
             path=file_path,
@@ -161,7 +193,7 @@ class LogSearchCommandTest(TestCase):
     def test_valid_filters_command(self):
         print("\n--------- VALID FILTER COMMAND TEST ----------")
 
-        file_path = "try_programs/django_errors.log.jsonl"
+        file_path = self.create_test_log_file()
 
         log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
         LogReader().create_index_in_db(log_file.uid, indexing_attributes=["level", "user_id"])
@@ -192,7 +224,7 @@ class LogSearchCommandTest(TestCase):
     def test_no_matching_logs(self):
         print("\n--------- NO MATCHING LOGS TEST ----------")
 
-        file_path = "try_programs/django_errors.log.jsonl"
+        file_path = self.create_test_log_file()
 
         log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
 
@@ -215,7 +247,7 @@ class LogSearchCommandTest(TestCase):
     def test_multiple_matching_logs(self):
         print("\n--------- MULTIPLE MATCHING LOGS TEST ----------")
 
-        file_path = "try_programs/django_errors.log.jsonl"
+        file_path = self.create_test_log_file()
 
         log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
 
@@ -238,7 +270,7 @@ class LogSearchCommandTest(TestCase):
     def test_json_output_validity(self):
         print("\n--------- JSON OUTPUT VALIDITY TEST ----------")
 
-        file_path = "try_programs/django_errors.log.jsonl"
+        file_path = self.create_test_log_file()
 
         log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
 
@@ -277,7 +309,7 @@ class LogSearchCommandTest(TestCase):
     def test_non_indexed_filter(self):
         print("\n--------- NON-INDEXED FILTER TEST ----------")
 
-        file_path = "try_programs/django_errors.log.jsonl"
+        file_path = self.create_test_log_file()
 
         log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
 
@@ -287,8 +319,6 @@ class LogSearchCommandTest(TestCase):
         err = StringIO()
 
         call_command("logsearch",file=file_path, filter=["level=ERROR"], stdout=out, stderr=err)
-
-        output = out.getvalue()
         self.assertIn("Filter attribute 'level' is not indexed for this log file.", err.getvalue())
 
         print("Non-indexed filter Test Passed Successfully!!")
@@ -322,7 +352,7 @@ class LogSearchCommandTest(TestCase):
     def test_multiple_filters_with_non_indexed_attribute(self):
         print("\n--------- MULTIPLE FILTERS NON-INDEXED TEST ----------")
 
-        file_path = "try_programs/django_errors.log.jsonl"
+        file_path = self.create_test_log_file()
 
         log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
 
@@ -345,7 +375,7 @@ class LogSearchCommandTest(TestCase):
     def test_no_filters(self):
         print("\n--------- NO FILTERS TEST ----------")
 
-        file_path = "try_programs/django_errors.log.jsonl"
+        file_path = self.create_test_log_file()
 
         log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
 
@@ -369,7 +399,7 @@ class LogSearchCommandTest(TestCase):
     def test_result_order(self):
         print("\n--------- RESULT ORDER TEST ----------")
 
-        file_path = "try_programs/django_errors.log.jsonl"
+        file_path = self.create_test_log_file()
 
         log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
 
@@ -414,32 +444,30 @@ class LogSearchCommandTest(TestCase):
     def test_stale_index(self):
         print("\n--------- STALE INDEX TEST ----------")
 
-        file_path = "try_programs/stale_index_test.log.jsonl"
-        original_content = (
-            '{"user_id":"user-101","message":"Original"}\n'
-        )
-
-        with open(file_path, "w", encoding="utf-8") as file:
-            file.write(original_content)
+        file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
+        self.file_path = file.name
 
         try:
-            log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
-            LogReader().create_index_in_db(log_file.uid, indexing_attributes=["user_id"])
-
-            with open(file_path, "a", encoding="utf-8") as file:
-                file.write('{"user_id":"user-101","message":"New"}\n')
-
-            out = StringIO()
-            err = StringIO()
-
-            call_command("logsearch", file=file_path, filter=["user_id=user-101"], stdout=out, stderr=err)
-
-            logs = [json.loads(line) for line in out.getvalue().splitlines() if line.startswith("{")]
-
-            self.assertEqual(len(logs), 1)
-            self.assertEqual(logs[0]["message"], "Original")
-
-            print("Stale index Test Passed Successfully!!")
+            file.write('{"user_id":"user-101","message":"Original"}\n')
         finally:
-            if os.path.exists(file_path):
-                os.remove(file_path)
+            file.close()
+
+        file_path = self.file_path
+
+        log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
+        LogReader().create_index_in_db(log_file.uid, indexing_attributes=["user_id"])
+
+        with open(file_path, "a", encoding="utf-8") as file:
+            file.write('{"user_id":"user-101","message":"New"}\n')
+
+        out = StringIO()
+        err = StringIO()
+
+        call_command("logsearch", file=file_path, filter=["user_id=user-101"], stdout=out, stderr=err)
+
+        logs = [json.loads(line)for line in out.getvalue().splitlines() if line.startswith("{")]
+
+        self.assertEqual(len(logs), 1)
+        self.assertEqual(logs[0]["message"], "Original")
+
+        print("Stale index Test Passed Successfully!!")
