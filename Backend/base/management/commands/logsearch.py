@@ -48,10 +48,22 @@ def parse_indent(indent):
 class Command(BaseCommand):
     help = "Search indexed JSONL log files"
 
+
+    def print_logs(self, logs):
+        if self.quiet:
+            for i,log in enumerate(logs):
+                self.stdout.write(json.dumps(log, indent=self.parsed_indent))
+        else:
+            self.stdout.write(f"Found log file: {self.log_file.path}")
+            for i,log in enumerate(logs):
+                self.stdout.write(f'log {i+1}:')
+                self.stdout.write(json.dumps(log, indent=self.parsed_indent), ending='\n--------\n')
+
     def handle(self, *args, **options):
         file_path = options["file"]
         filters = options.get("filter", [])
         indent = options.get("indent")
+        self.quiet = options.get("quiet")
 
         try:
             parsed_filters = parse_filters(filters)
@@ -59,18 +71,21 @@ class Command(BaseCommand):
             raise CommandError(str(exc))
 
         try:
-            parsed_indent = parse_indent(indent)
+            self.parsed_indent = parse_indent(indent)
         except ValueError as exc:
             raise CommandError(str(exc))
 
         try:
-            log_file = LogFile.objects.get(path=file_path)
+            self.log_file = LogFile.objects.get(path=file_path)
         except LogFile.DoesNotExist:
             self.stderr.write(self.style.ERROR("Log file is not registered."))
             return
-        self.stdout.write(f"Found log file: {log_file.path}")
 
-        indexed_attributes = set(log_file.locations.values_list("indexes__attribute_name", flat=True)) #type:ignore
+        if not self.quiet:
+            self.stdout.write(f"Found log file: {self.log_file.path}")
+        
+
+        indexed_attributes = set(self.log_file.locations.values_list("indexes__attribute_name", flat=True)) #type:ignore
         for attribute in parsed_filters:
             if attribute not in indexed_attributes:
                 self.stderr.write(self.style.ERROR(f"Filter attribute '{attribute}' is not indexed for this log file."))
@@ -79,22 +94,19 @@ class Command(BaseCommand):
         reader = LogReader()
 
         locations = reader.search_log_using_db(parsed_filters)
-        locations = locations.filter(log_file=log_file).order_by("start_position")
+        locations = locations.filter(log_file= self.log_file).order_by("start_position")
 
         try:
             logs = reader.read_log_using_db(locations)
         except FileNotFoundError:
-            self.stderr.write(self.style.ERROR(f"Log file is missing from disk: {log_file.path}"))
+            self.stderr.write(self.style.ERROR(f"Log file is missing from disk: {self.log_file.path}"))
             return
 
         if not logs:
             self.stdout.write("No matching logs found.")
             return
 
-        for i,log in enumerate(logs):
-            self.stdout.write(f'log {i+1}:')
-            #self.stdout.write(json.dumps(log, indent=options["indent"]), ending='\n--------\n')
-            self.stdout.write(json.dumps(log, indent=parsed_indent), ending='\n--------\n')
+        self.print_logs(logs)
         
 
 
@@ -102,6 +114,7 @@ class Command(BaseCommand):
         parser.add_argument("--file", required=True, help="Path to the JSONL log file")
         parser.add_argument("--filter", action="append", default=[], help="Filter logs using key=value. Can be repeated.")
         parser.add_argument("--indent", default=None, help="Pretty-print JSON output with the specified indentation.")
+        parser.add_argument("--quiet", action="store_true", help="Suppress informational output.")
 
 
     

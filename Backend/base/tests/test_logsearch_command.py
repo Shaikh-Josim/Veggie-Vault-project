@@ -518,3 +518,71 @@ class LogSearchCommandTest(TestCase):
         self.assertIn('{\n  "user_id": "user-101",', output)
 
         print("Indent Output Test Passed Successfully!!")
+
+
+    # Run this test function with:
+    # python manage.py test base.tests.test_logsearch_command.LogSearchCommandTest.test_quiet_output
+    def test_quiet_output(self):
+        logger.info("\n--------- QUIET OUTPUT TEST ----------")
+
+        file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
+        self.file_path = file.name
+
+        try:
+            file.write('{"user_id":"user-101","message":"Original"}\n')
+        finally:
+            file.close()
+
+        file_path = self.file_path
+
+        log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now(),)
+
+        LogReader().create_index_in_db(log_file.uid, indexing_attributes=["user_id"])
+
+        out = StringIO()
+        err = StringIO()
+
+        call_command("logsearch", file=file_path, filter=["user_id=user-101"], quiet=True, stdout=out, stderr=err)
+
+        output = out.getvalue()
+
+        self.assertNotIn("Found log file:", output)
+        self.assertNotIn("log 1:", output)
+        self.assertNotIn("--------", output)
+        self.assertIn('"user_id": "user-101"', output)
+
+        print("Quiet Output Test Passed Successfully!!")
+
+
+    # Run this test function with:
+    # python manage.py test base.tests.test_logsearch_command.LogSearchCommandTest.test_quiet_indent_output
+    def test_quiet_indent_output(self):
+        logger.info("\n--------- QUIET + INDENT OUTPUT TEST ----------")
+
+        file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
+        self.file_path = file.name
+
+        try:
+            file.write('{"user_id":"user-101","message":"Original"}\n')
+        finally:
+            file.close()
+
+        file_path = self.file_path
+
+        log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
+
+        LogReader().create_index_in_db(log_file.uid, indexing_attributes=["user_id"])
+
+        out = StringIO()
+        err = StringIO()
+
+        call_command("logsearch", file=file_path, filter=["user_id=user-101"], quiet=True, indent="2", stdout=out, stderr=err)
+
+        output = out.getvalue()
+
+        self.assertNotIn("Found log file:", output)
+        self.assertNotIn("log 1:", output)
+        self.assertNotIn("--------", output)
+        self.assertIn('{\n  "user_id": "user-101",',output)
+
+        print("Quiet + Indent Output Test Passed Successfully!!")
