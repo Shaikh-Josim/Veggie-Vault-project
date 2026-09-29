@@ -15,6 +15,9 @@ db.sqlite3
 images/
 staticfiles/
 
+#sqlite file
+*.sqlite3
+
 # IDEs & Editors
 .vscode/
 veggie-vault.code-workspace

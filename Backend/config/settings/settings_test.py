@@ -11,8 +11,8 @@ ROOT_URLCONF = "config.settings.test_urls"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
-        #"NAME": BASE_DIR / "sqlite.sqlite3",
+        #"NAME": ":memory:",
+        "NAME": BASE_DIR / "sqlite.sqlite3",
 
     }
 }

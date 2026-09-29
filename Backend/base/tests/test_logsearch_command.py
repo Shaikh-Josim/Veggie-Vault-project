@@ -9,8 +9,9 @@ from django.test import TestCase
 from django.utils import timezone
 
 from base.models import LogFile
-from base.management.commands.logsearch import parse_filters
+from base.management.commands.logsearch import parse_filters, parse_indent
 from base.log_reader import LogReader
+
 
 logger = logging.getLogger("base")
 
@@ -202,13 +203,7 @@ class LogSearchCommandTest(TestCase):
         out = StringIO()
         err = StringIO()
 
-        call_command(
-            "logsearch",
-            file=file_path,
-            filter=["level=ERROR", "user_id=user-102"],
-            stdout=out,
-            stderr=err,
-        )
+        call_command("logsearch", file=file_path, filter=["level=ERROR", "user_id=user-102"], stdout=out, stderr=err)
 
         output = out.getvalue()
 
@@ -443,7 +438,7 @@ class LogSearchCommandTest(TestCase):
     # Run this test function with:
     # python manage.py test base.tests.test_logsearch_command.LogSearchCommandTest.test_stale_index
     def test_stale_index(self):
-        print("\n--------- STALE INDEX TEST ----------")
+        logger.info("\n--------- STALE INDEX TEST ----------")
 
         file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
         self.file_path = file.name
@@ -472,3 +467,54 @@ class LogSearchCommandTest(TestCase):
         self.assertEqual(logs[0]["message"], "Original")
 
         print("Stale index Test Passed Successfully!!")
+
+
+    # Run this test function with:
+    # python manage.py test base.tests.test_logsearch_command.LogSearchCommandTest.test_parse_indent
+    def test_parse_indent(self):
+        logger.info("\n--------- PARSE INDENT TEST ----------")
+        self.assertEqual(parse_indent("0"), 0)
+        self.assertEqual(parse_indent("2"), 2)
+        self.assertEqual(parse_indent("10"), 10)
+
+        with self.assertRaisesRegex(ValueError, "Invalid indent format. Use a Non-Negative Integer value."):
+            parse_indent("-1")
+
+        with self.assertRaisesRegex(ValueError, "Invalid indent format. Use a Non-Negative Integer value."):
+            parse_indent("abc")
+
+        with self.assertRaisesRegex(ValueError, "Invalid indent format. Use a Non-Negative Integer value."):
+            parse_indent("2.5")
+
+        print("Test Passed Successfully!!")
+
+
+    # Run this test function with:
+    # python manage.py test base.tests.test_logsearch_command.LogSearchCommandTest.test_indent_output
+
+    def test_indent_output(self):
+        logger.info("\n--------- INDENT OUTPUT TEST ----------")
+
+        file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
+        self.file_path = file.name
+
+        try:
+            file.write('{"user_id":"user-101","message":"Original"}\n')
+        finally:
+            file.close()
+
+        file_path = self.file_path
+
+        log_file = LogFile.objects.create(path=file_path, file_modified_at=timezone.now())
+
+        LogReader().create_index_in_db(log_file.uid, indexing_attributes=["user_id"])
+
+        out = StringIO()
+        err = StringIO()
+
+        call_command("logsearch", file=file_path, filter=["user_id=user-101"], indent="2", stdout=out, stderr=err)
+
+        output = out.getvalue()
+        self.assertIn('{\n  "user_id": "user-101",', output)
+
+        print("Indent Output Test Passed Successfully!!")
